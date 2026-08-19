@@ -23,42 +23,61 @@ var HEADER = [
   'ln(RMSSD)', 'HRV score', 'RR count', 'RR intervals (ms)', 'HR series',
 ];
 
+// A Sheets cell holds at most 50,000 characters. Long sessions can exceed
+// that in the raw RR/HR columns, so oversized values are split across
+// continuation columns named "<header> (cont. 2)", "<header> (cont. 3)", …
+// Concatenating a column with its continuations restores the exact value.
+var CELL_LIMIT = 45000;
+
 function doPost(e) {
   var data = JSON.parse(e.postData.contents);
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
-
-  // Answer columns are created dynamically from the question text, so you
-  // can change your questions without touching this script.
   var answers = data.answers || {};
-  var questions = Object.keys(answers);
 
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow(HEADER.concat(questions));
-  }
-
-  // Add columns for any questions not yet in the header row.
-  var lastCol = sheet.getLastColumn();
-  var header = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-  questions.forEach(function (q) {
-    if (header.indexOf(q) === -1) {
-      sheet.getRange(1, header.length + 1).setValue(q);
-      header.push(q);
-    }
-  });
-
-  var row = [
+  // header name → cell value. Answer columns are created dynamically from
+  // the question text, so questions can change without touching this script.
+  var values = {};
+  var baseValues = [
     data.startedAt, data.endedAt, data.plannedMinutes, data.meditatedMinutes,
     data.overtimeMinutes, data.includedOvertime, data.aborted, data.openEnded,
     data.meanHr, data.minHr, data.maxHr, data.meanRrMs, data.sdnnMs,
     data.rmssdMs, data.lnRmssd, data.hrvScore, data.rrCount,
     data.rrIntervalsMs, data.hrSeries,
   ];
-  // Place each answer under its question's column.
-  header.slice(HEADER.length).forEach(function (q) {
-    row.push(answers[q] !== undefined ? answers[q] : '');
+  HEADER.forEach(function (name, i) { values[name] = baseValues[i]; });
+  Object.keys(answers).forEach(function (q) { values[q] = answers[q]; });
+
+  // Split any oversized value into continuation entries.
+  Object.keys(values).forEach(function (name) {
+    var v = values[name];
+    if (typeof v === 'string' && v.length > CELL_LIMIT) {
+      for (var part = 2, s = CELL_LIMIT; s < v.length; part++, s += CELL_LIMIT) {
+        values[name + ' (cont. ' + part + ')'] = v.slice(s, s + CELL_LIMIT);
+      }
+      values[name] = v.slice(0, CELL_LIMIT);
+    }
   });
 
+  // Make sure every value has a header column, extending the header row
+  // with any new names (new questions, new continuation columns).
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(HEADER);
+  }
+  var lastCol = sheet.getLastColumn();
+  var header = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  Object.keys(values).forEach(function (name) {
+    if (header.indexOf(name) === -1) {
+      sheet.getRange(1, header.length + 1).setValue(name);
+      header.push(name);
+    }
+  });
+
+  // Emit the row in header order.
+  var row = header.map(function (name) {
+    return values[name] !== undefined ? values[name] : '';
+  });
   sheet.appendRow(row);
+
   return ContentService.createTextOutput(
     JSON.stringify({ ok: true })
   ).setMimeType(ContentService.MimeType.JSON);
