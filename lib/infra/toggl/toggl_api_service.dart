@@ -4,6 +4,13 @@ import 'package:http/http.dart' as http;
 
 import '../../core/services/toggl_service.dart';
 
+/// A Toggl project, as listed in the settings picker.
+class TogglProject {
+  final int id;
+  final String name;
+  const TogglProject({required this.id, required this.name});
+}
+
 /// Toggl Track API v9 client. Only needs the user's API token; the workspace
 /// is looked up from /me unless one is configured explicitly.
 class TogglApiService implements TogglService {
@@ -45,6 +52,7 @@ class TogglApiService implements TogglService {
     required DateTime stop,
     required String description,
     required int workspaceId,
+    int projectId = 0,
   }) {
     final startUtc = start.toUtc();
     return {
@@ -53,6 +61,7 @@ class TogglApiService implements TogglService {
       'start': startUtc.toIso8601String(),
       'duration': stop.difference(start).inSeconds,
       'workspace_id': workspaceId,
+      if (projectId > 0) 'project_id': projectId,
       'tags': ['meditation'],
     };
   }
@@ -62,6 +71,7 @@ class TogglApiService implements TogglService {
     required DateTime start,
     required DateTime stop,
     required String description,
+    int projectId = 0,
   }) async {
     final token = getApiToken().trim();
     if (token.isEmpty) return false;
@@ -77,12 +87,39 @@ class TogglApiService implements TogglService {
               stop: stop,
               description: description,
               workspaceId: wid,
+              projectId: projectId,
             )),
           )
           .timeout(const Duration(seconds: 15));
       return resp.statusCode == 200;
     } catch (_) {
       return false;
+    }
+  }
+
+  /// Active projects in the workspace, for the settings picker.
+  /// Returns null when the request fails (offline, bad token).
+  Future<List<TogglProject>?> fetchProjects() async {
+    final token = getApiToken().trim();
+    if (token.isEmpty) return null;
+    try {
+      final wid = await _workspaceId(token);
+      if (wid == null) return null;
+      final resp = await _client
+          .get(Uri.parse('$_base/workspaces/$wid/projects?active=true'),
+              headers: _headers(token))
+          .timeout(const Duration(seconds: 15));
+      if (resp.statusCode != 200) return null;
+      final list = jsonDecode(resp.body) as List;
+      return [
+        for (final p in list.cast<Map<String, dynamic>>())
+          TogglProject(
+            id: (p['id'] as num).toInt(),
+            name: p['name'] as String? ?? 'Unnamed project',
+          ),
+      ];
+    } catch (_) {
+      return null;
     }
   }
 

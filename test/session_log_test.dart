@@ -72,6 +72,19 @@ void main() {
       expect(body['workspace_id'], 12345);
       expect(body['description'], 'Meditation');
       expect(body['tags'], ['meditation']);
+      // No project chosen → field omitted entirely.
+      expect(body.containsKey('project_id'), isFalse);
+    });
+
+    test('includes project_id when a project is configured', () {
+      final body = TogglApiService.buildTimeEntryBody(
+        start: DateTime.utc(2026, 8, 10, 14, 0, 0),
+        stop: DateTime.utc(2026, 8, 10, 14, 20, 0),
+        description: 'Meditation',
+        workspaceId: 12345,
+        projectId: 987,
+      );
+      expect(body['project_id'], 987);
     });
   });
 }

@@ -121,6 +121,7 @@ class SessionController extends ChangeNotifier {
     final record = SessionRecord(
       payload: entry.toSheetsPayload(),
       togglDescription: settings.togglDescription,
+      togglProjectId: settings.togglProjectId,
     );
     await history.add(record);
     await history.syncPending();

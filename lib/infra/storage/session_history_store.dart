@@ -88,6 +88,7 @@ class SessionHistoryStore extends ChangeNotifier {
             start: r.startedAt,
             stop: r.endedAt,
             description: r.togglDescription,
+            projectId: r.togglProjectId,
           );
           if (ok) {
             r.togglSynced = true;

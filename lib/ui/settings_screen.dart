@@ -21,6 +21,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late TextEditingController _togglDescription;
   late Metronome _metronome;
   bool _metronomePreviewing = false;
+  bool _loadingProjects = false;
 
   @override
   void initState() {
@@ -44,6 +45,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
   SettingsStore get _store => context.read<SettingsStore>();
 
   void _update(AppSettings next) => _store.update(next);
+
+  Future<void> _pickTogglProject() async {
+    final toggl = context.read<TogglApiService>();
+    final messenger = ScaffoldMessenger.of(context);
+    if (_store.settings.togglApiToken.trim().isEmpty) {
+      messenger.showSnackBar(
+          const SnackBar(content: Text('Enter your Toggl API token first')));
+      return;
+    }
+    setState(() => _loadingProjects = true);
+    final projects = await toggl.fetchProjects();
+    if (!mounted) return;
+    setState(() => _loadingProjects = false);
+    if (projects == null) {
+      messenger.showSnackBar(const SnackBar(
+          content:
+              Text('Could not load projects — check the token and network')));
+      return;
+    }
+    final choice = await showDialog<TogglProject>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Toggl project'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () =>
+                Navigator.pop(ctx, const TogglProject(id: 0, name: '')),
+            child: const Text('No project'),
+          ),
+          for (final p in projects)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, p),
+              child: Text(p.name),
+            ),
+          if (projects.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('No active projects in this workspace'),
+            ),
+        ],
+      ),
+    );
+    if (choice != null) {
+      _update(_store.settings
+          .copyWith(togglProjectId: choice.id, togglProjectName: choice.name));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -170,6 +218,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             onChanged: (v) =>
                 _update(_store.settings.copyWith(togglDescription: v)),
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Project'),
+            subtitle: Text(settings.togglProjectName.isEmpty
+                ? 'No project'
+                : settings.togglProjectName),
+            trailing: _loadingProjects
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.chevron_right),
+            onTap: _loadingProjects ? null : _pickTogglProject,
           ),
           Align(
             alignment: Alignment.centerRight,

@@ -16,6 +16,12 @@ class AppSettings {
   final int togglWorkspaceId;
   final String togglDescription;
 
+  /// Toggl project to file time entries under; 0 = no project.
+  final int togglProjectId;
+
+  /// Display name of the chosen project (the id is what's sent to Toggl).
+  final String togglProjectName;
+
   /// Questions asked after each session; answers are logged to the sheet.
   final List<String> questions;
 
@@ -30,6 +36,8 @@ class AppSettings {
     this.togglApiToken = '',
     this.togglWorkspaceId = 0,
     this.togglDescription = 'Meditation',
+    this.togglProjectId = 0,
+    this.togglProjectName = '',
     this.questions = defaultQuestions,
     this.lastHrDeviceId = '',
     this.lastHrDeviceName = '',
@@ -48,6 +56,8 @@ class AppSettings {
     String? togglApiToken,
     int? togglWorkspaceId,
     String? togglDescription,
+    int? togglProjectId,
+    String? togglProjectName,
     List<String>? questions,
     String? lastHrDeviceId,
     String? lastHrDeviceName,
@@ -59,6 +69,8 @@ class AppSettings {
         togglApiToken: togglApiToken ?? this.togglApiToken,
         togglWorkspaceId: togglWorkspaceId ?? this.togglWorkspaceId,
         togglDescription: togglDescription ?? this.togglDescription,
+        togglProjectId: togglProjectId ?? this.togglProjectId,
+        togglProjectName: togglProjectName ?? this.togglProjectName,
         questions: questions ?? this.questions,
         lastHrDeviceId: lastHrDeviceId ?? this.lastHrDeviceId,
         lastHrDeviceName: lastHrDeviceName ?? this.lastHrDeviceName,
@@ -71,6 +83,8 @@ class AppSettings {
         'togglApiToken': togglApiToken,
         'togglWorkspaceId': togglWorkspaceId,
         'togglDescription': togglDescription,
+        'togglProjectId': togglProjectId,
+        'togglProjectName': togglProjectName,
         'questions': questions,
         'lastHrDeviceId': lastHrDeviceId,
         'lastHrDeviceName': lastHrDeviceName,
@@ -86,6 +100,8 @@ class AppSettings {
       togglApiToken: json['togglApiToken'] as String? ?? '',
       togglWorkspaceId: (json['togglWorkspaceId'] as num?)?.toInt() ?? 0,
       togglDescription: json['togglDescription'] as String? ?? 'Meditation',
+      togglProjectId: (json['togglProjectId'] as num?)?.toInt() ?? 0,
+      togglProjectName: json['togglProjectName'] as String? ?? '',
       questions: (json['questions'] as List?)?.cast<String>() ??
           defaultQuestions,
       lastHrDeviceId: json['lastHrDeviceId'] as String? ?? '',

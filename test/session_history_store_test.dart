@@ -18,13 +18,16 @@ class FakeSheets implements SheetsLogger {
 class FakeToggl implements TogglService {
   bool online = false;
   int posts = 0;
+  int? lastProjectId;
   @override
   Future<bool> logTimeEntry({
     required DateTime start,
     required DateTime stop,
     required String description,
+    int projectId = 0,
   }) async {
     posts++;
+    lastProjectId = projectId;
     return online;
   }
 }
@@ -36,6 +39,7 @@ SessionRecord record(String startedAt) => SessionRecord(
         'meditatedMinutes': 10,
       },
       togglDescription: 'Meditation',
+      togglProjectId: 777,
     );
 
 void main() {
@@ -77,6 +81,8 @@ void main() {
       expect(reloaded.pendingCount, 0);
       expect(reloaded.records.single.sheetsSynced, isTrue);
       expect(reloaded.records.single.togglSynced, isTrue);
+      // The project chosen when the session was saved survives the restart.
+      expect(toggl.lastProjectId, 777);
 
       // Sync state also survives a restart; nothing re-uploads.
       final again = store();
