@@ -18,7 +18,7 @@
 
 var HEADER = [
   'Started at', 'Ended at', 'Planned (min)', 'Meditated (min)',
-  'Overtime (min)', 'Included overtime', 'Aborted',
+  'Overtime (min)', 'Included overtime', 'Aborted', 'Open-ended',
   'Mean HR', 'Min HR', 'Max HR', 'Mean RR (ms)', 'SDNN (ms)', 'RMSSD (ms)',
   'ln(RMSSD)', 'HRV score', 'RR count', 'RR intervals (ms)', 'HR series',
 ];
@@ -48,7 +48,7 @@ function doPost(e) {
 
   var row = [
     data.startedAt, data.endedAt, data.plannedMinutes, data.meditatedMinutes,
-    data.overtimeMinutes, data.includedOvertime, data.aborted,
+    data.overtimeMinutes, data.includedOvertime, data.aborted, data.openEnded,
     data.meanHr, data.minHr, data.maxHr, data.meanRrMs, data.sdnnMs,
     data.rmssdMs, data.lnRmssd, data.hrvScore, data.rrCount,
     data.rrIntervalsMs, data.hrSeries,
