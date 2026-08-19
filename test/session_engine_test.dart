@@ -77,6 +77,35 @@ void main() {
       });
     });
 
+    test('open-ended session counts up, never gongs, records elapsed', () {
+      fakeAsync((async) {
+        final clock = FakeClock();
+        var gongs = 0;
+        final engine = SessionEngine(clock: clock, onGong: () => gongs++);
+
+        engine.start(null);
+        expect(engine.openEnded, isTrue);
+        expect(engine.phase, SessionPhase.running);
+        expect(engine.remaining, Duration.zero);
+
+        clock.advance(const Duration(minutes: 42, seconds: 10));
+        async.elapse(const Duration(minutes: 42, seconds: 10));
+        expect(engine.phase, SessionPhase.running);
+        expect(engine.elapsed, const Duration(minutes: 42, seconds: 10));
+        expect(gongs, 0);
+
+        final outcome = engine.stop();
+        expect(outcome.openEnded, isTrue);
+        expect(outcome.aborted, isFalse);
+        expect(outcome.completedTimer, isFalse);
+        expect(outcome.planned, Duration.zero);
+        expect(outcome.overtime, Duration.zero);
+        expect(outcome.meditatedDuration(includeOvertime: false),
+            const Duration(minutes: 42, seconds: 10));
+        expect(engine.openEnded, isFalse);
+      });
+    });
+
     test('gong fires only once even as ticks continue', () {
       fakeAsync((async) {
         final clock = FakeClock();

@@ -8,7 +8,7 @@ import 'services/clock.dart';
 enum SessionPhase {
   idle,
 
-  /// Timer counting down toward the gong.
+  /// Timer counting down toward the gong, or (open-ended) counting up.
   running,
 
   /// Gong has sounded; stopwatch counting up until the user presses stop.
@@ -31,15 +31,19 @@ class SessionEngine extends ChangeNotifier {
   DateTime? _startedAt;
   DateTime? _gongAt;
   Duration _planned = Duration.zero;
+  bool _openEnded = false;
   Timer? _ticker;
 
   SessionPhase get phase => _phase;
   DateTime? get startedAt => _startedAt;
   Duration get planned => _planned;
 
+  /// True while running an open-ended session (stopwatch only, no gong).
+  bool get openEnded => _openEnded;
+
   /// Time left on the countdown (clamped at zero).
   Duration get remaining {
-    if (_phase != SessionPhase.running || _startedAt == null) {
+    if (_openEnded || _phase != SessionPhase.running || _startedAt == null) {
       return Duration.zero;
     }
     final left = _planned - clock.now().difference(_startedAt!);
@@ -59,10 +63,13 @@ class SessionEngine extends ChangeNotifier {
     return clock.now().difference(_gongAt!);
   }
 
-  void start(Duration planned) {
+  /// Starts a session. Pass null for an open-ended session: no countdown or
+  /// gong, just a stopwatch until [stop].
+  void start(Duration? planned) {
     assert(_phase == SessionPhase.idle, 'session already in progress');
-    assert(planned > Duration.zero);
-    _planned = planned;
+    assert(planned == null || planned > Duration.zero);
+    _openEnded = planned == null;
+    _planned = planned ?? Duration.zero;
     _startedAt = clock.now();
     _gongAt = null;
     _phase = SessionPhase.running;
@@ -74,7 +81,8 @@ class SessionEngine extends ChangeNotifier {
   /// by tests.
   @visibleForTesting
   void tick() {
-    if (_phase == SessionPhase.running &&
+    if (!_openEnded &&
+        _phase == SessionPhase.running &&
         clock.now().difference(_startedAt!) >= _planned) {
       _gongAt = _startedAt!.add(_planned);
       _phase = SessionPhase.overtime;
@@ -98,10 +106,12 @@ class SessionEngine extends ChangeNotifier {
       planned: _planned,
       completedTimer: completed,
       overtime: completed ? now.difference(_gongAt!) : Duration.zero,
+      openEnded: _openEnded,
     );
     _phase = SessionPhase.idle;
     _startedAt = null;
     _gongAt = null;
+    _openEnded = false;
     notifyListeners();
     return outcome;
   }

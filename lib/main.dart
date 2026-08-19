@@ -10,6 +10,7 @@ import 'core/session_engine.dart';
 import 'infra/audio/player_audio_service.dart';
 import 'infra/ble/flutter_blue_hr_service.dart';
 import 'infra/sheets/webhook_sheets_logger.dart';
+import 'infra/storage/session_history_store.dart';
 import 'infra/storage/settings_store.dart';
 import 'infra/toggl/toggl_api_service.dart';
 import 'ui/home_screen.dart';
@@ -33,6 +34,15 @@ Future<void> main() async {
     getApiToken: () => settingsStore.settings.togglApiToken,
     getWorkspaceId: () => settingsStore.settings.togglWorkspaceId,
   );
+  final history = SessionHistoryStore(
+    sheets: sheets,
+    toggl: toggl,
+    isSheetsConfigured: () =>
+        settingsStore.settings.sheetsWebhookUrl.trim().isNotEmpty,
+    isTogglConfigured: () =>
+        settingsStore.settings.togglApiToken.trim().isNotEmpty,
+  );
+  await history.load();
 
   final engine = SessionEngine(clock: clock);
   final controller = SessionController(
@@ -42,13 +52,12 @@ Future<void> main() async {
     heartRate: heartRate,
     recorder: recorder,
     settingsStore: settingsStore,
-    sheets: sheets,
-    toggl: toggl,
+    history: history,
   );
   engine.onGong = controller.handleGong;
 
-  // Flush any sheet rows that failed to upload in earlier runs.
-  sheets.retryPending();
+  // Push any sessions recorded offline in earlier runs.
+  history.syncPending();
 
   runApp(MeditationApp(
     settingsStore: settingsStore,
@@ -56,15 +65,17 @@ Future<void> main() async {
     heartRate: heartRate,
     metronome: metronome,
     toggl: toggl,
+    history: history,
   ));
 }
 
-class MeditationApp extends StatelessWidget {
+class MeditationApp extends StatefulWidget {
   final SettingsStore settingsStore;
   final SessionController controller;
   final HeartRateService heartRate;
   final Metronome metronome;
   final TogglApiService toggl;
+  final SessionHistoryStore history;
 
   const MeditationApp({
     super.key,
@@ -73,17 +84,45 @@ class MeditationApp extends StatelessWidget {
     required this.heartRate,
     required this.metronome,
     required this.toggl,
+    required this.history,
   });
+
+  @override
+  State<MeditationApp> createState() => _MeditationAppState();
+}
+
+class _MeditationAppState extends State<MeditationApp>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Coming back to the foreground is our "maybe online again" signal.
+    if (state == AppLifecycleState.resumed) {
+      widget.history.syncPending();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider.value(value: settingsStore),
-        ChangeNotifierProvider.value(value: controller),
-        Provider<HeartRateService>.value(value: heartRate),
-        Provider<Metronome>.value(value: metronome),
-        Provider<TogglApiService>.value(value: toggl),
+        ChangeNotifierProvider.value(value: widget.settingsStore),
+        ChangeNotifierProvider.value(value: widget.controller),
+        Provider<HeartRateService>.value(value: widget.heartRate),
+        Provider<Metronome>.value(value: widget.metronome),
+        Provider<TogglApiService>.value(value: widget.toggl),
+        ChangeNotifierProvider.value(value: widget.history),
       ],
       child: MaterialApp(
         title: 'Meditation',

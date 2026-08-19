@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../controllers/session_controller.dart';
 import '../core/services/heart_rate_service.dart';
 import '../infra/storage/settings_store.dart';
+import 'history_screen.dart';
 import 'hr_connect_sheet.dart';
 import 'session_screen.dart';
 import 'settings_screen.dart';
@@ -17,6 +18,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int? _minutes;
+  bool _openEnded = false;
 
   static const _quickPicks = [5, 10, 15, 20, 30, 45, 60];
 
@@ -29,6 +31,12 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('Meditation'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.history),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const HistoryScreen()),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             onPressed: () => Navigator.of(context).push(
@@ -43,25 +51,26 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             children: [
               const Spacer(),
-              Text('$minutes',
+              Text(_openEnded ? '∞' : '$minutes',
                   style: Theme.of(context)
                       .textTheme
                       .displayLarge
                       ?.copyWith(fontSize: 96, fontWeight: FontWeight.w200)),
-              Text('minutes', style: Theme.of(context).textTheme.titleMedium),
+              Text(_openEnded ? 'open-ended' : 'minutes',
+                  style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   IconButton.outlined(
-                    onPressed: minutes > 1
+                    onPressed: !_openEnded && minutes > 1
                         ? () => setState(() => _minutes = minutes - 1)
                         : null,
                     icon: const Icon(Icons.remove),
                   ),
                   const SizedBox(width: 24),
                   IconButton.outlined(
-                    onPressed: minutes < 180
+                    onPressed: !_openEnded && minutes < 180
                         ? () => setState(() => _minutes = minutes + 1)
                         : null,
                     icon: const Icon(Icons.add),
@@ -76,9 +85,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   for (final m in _quickPicks)
                     ChoiceChip(
                       label: Text('$m'),
-                      selected: minutes == m,
-                      onSelected: (_) => setState(() => _minutes = m),
+                      selected: !_openEnded && minutes == m,
+                      onSelected: (_) => setState(() {
+                        _minutes = m;
+                        _openEnded = false;
+                      }),
                     ),
+                  ChoiceChip(
+                    label: const Text('∞'),
+                    selected: _openEnded,
+                    onSelected: (_) => setState(() => _openEnded = true),
+                  ),
                 ],
               ),
               const Spacer(),
@@ -91,7 +108,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 onPressed: () {
                   final controller = context.read<SessionController>();
-                  controller.startSession(Duration(minutes: minutes));
+                  controller.startSession(
+                      _openEnded ? null : Duration(minutes: minutes));
                   Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const SessionScreen()),
                   );

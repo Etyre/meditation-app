@@ -42,6 +42,7 @@ class SessionLogEntry {
       'overtimeMinutes': _minutes(o.overtime),
       'includedOvertime': includeOvertime,
       'aborted': o.aborted,
+      'openEnded': o.openEnded,
       'answers': answers,
       'meanHr': hrv?.meanHr,
       'minHr': hrv?.minHr,

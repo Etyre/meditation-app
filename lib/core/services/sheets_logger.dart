@@ -1,12 +1,8 @@
-import 'session_log.dart';
-
-/// Sends a finished session to the user's Google Sheet.
+/// Sends one session payload to the user's Google Sheet.
+///
+/// Implementations attempt a single delivery and report success; queueing
+/// and retry live in SessionHistoryStore, which owns the local record.
 abstract class SheetsLogger {
-  /// Returns true on success. Implementations should queue and retry on
-  /// failure rather than losing data.
-  Future<bool> logSession(SessionLogEntry entry);
-
-  /// Attempts to flush any entries that previously failed to upload.
-  /// Returns how many were successfully flushed.
-  Future<int> retryPending();
+  /// Returns true when the payload was delivered.
+  Future<bool> postPayload(Map<String, dynamic> payload);
 }

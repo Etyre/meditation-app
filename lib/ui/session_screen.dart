@@ -16,6 +16,7 @@ class SessionScreen extends StatelessWidget {
     final controller = context.watch<SessionController>();
     final engine = controller.engine;
     final inOvertime = engine.phase == SessionPhase.overtime;
+    final openEnded = engine.openEnded;
 
     return PopScope(
       canPop: false, // the only way out is the stop button
@@ -27,14 +28,20 @@ class SessionScreen extends StatelessWidget {
               children: [
                 const Spacer(flex: 2),
                 Text(
-                  inOvertime ? 'sitting on' : 'remaining',
+                  openEnded
+                      ? 'meditating'
+                      : inOvertime
+                          ? 'sitting on'
+                          : 'remaining',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  inOvertime
-                      ? '+${formatMmSs(engine.overtime)}'
-                      : formatMmSs(engine.remaining),
+                  openEnded
+                      ? formatMmSs(engine.elapsed)
+                      : inOvertime
+                          ? '+${formatMmSs(engine.overtime)}'
+                          : formatMmSs(engine.remaining),
                   style: Theme.of(context).textTheme.displayLarge?.copyWith(
                         fontSize: 88,
                         fontWeight: FontWeight.w200,

@@ -48,16 +48,13 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
     );
     if (!mounted) return;
     final messages = <String>[
+      'Saved on device',
       if (result.sheetsConfigured)
         result.sheetsOk
-            ? 'Logged to Google Sheet'
-            : 'Sheet upload failed — saved for retry'
-      else
-        'Google Sheet not configured',
+            ? 'logged to Google Sheet'
+            : 'Sheet sync queued for when online',
       if (result.togglConfigured)
-        result.togglOk ? 'Logged to Toggl' : 'Toggl logging failed'
-      else
-        'Toggl not configured',
+        result.togglOk ? 'logged to Toggl' : 'Toggl sync queued for when online',
     ];
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(messages.join(' · '))));
@@ -88,7 +85,11 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _row('Timer', formatMinutes(outcome.planned)),
+                    _row(
+                        'Timer',
+                        outcome.openEnded
+                            ? 'Open-ended'
+                            : formatMinutes(outcome.planned)),
                     if (outcome.aborted)
                       _row('Stopped early at',
                           formatMmSs(outcome.actualElapsed)),

@@ -5,15 +5,17 @@ import '../core/hrv/hr_recorder.dart';
 import '../core/hrv/hrv_analysis.dart';
 import '../core/metronome.dart';
 import '../core/models/session.dart';
+import '../core/models/session_record.dart';
 import '../core/services/audio_service.dart';
 import '../core/services/heart_rate_service.dart';
 import '../core/services/session_log.dart';
-import '../core/services/sheets_logger.dart';
-import '../core/services/toggl_service.dart';
 import '../core/session_engine.dart';
+import '../infra/storage/session_history_store.dart';
 import '../infra/storage/settings_store.dart';
 
 class SubmitResult {
+  /// The session is always saved to the device-local history first; these
+  /// flags report whether the immediate sync attempt reached each service.
   final bool sheetsOk;
   final bool togglOk;
   final bool sheetsConfigured;
@@ -35,8 +37,7 @@ class SessionController extends ChangeNotifier {
   final HeartRateService heartRate;
   final HrRecorder recorder;
   final SettingsStore settingsStore;
-  final SheetsLogger sheets;
-  final TogglService toggl;
+  final SessionHistoryStore history;
 
   SessionController({
     required this.engine,
@@ -45,8 +46,7 @@ class SessionController extends ChangeNotifier {
     required this.heartRate,
     required this.recorder,
     required this.settingsStore,
-    required this.sheets,
-    required this.toggl,
+    required this.history,
   }) {
     engine.addListener(notifyListeners);
   }
@@ -60,7 +60,8 @@ class SessionController extends ChangeNotifier {
   bool _hrWasRecorded = false;
   bool get hrWasRecorded => _hrWasRecorded;
 
-  void startSession(Duration planned) {
+  /// Pass null for an open-ended session (stopwatch only, no gong).
+  void startSession(Duration? planned) {
     engine.start(planned);
     metronome.start(settingsStore.settings.metronome);
     if (heartRate.currentState == HrConnectionState.connected) {
@@ -93,7 +94,8 @@ class SessionController extends ChangeNotifier {
     return outcome;
   }
 
-  /// Sends the finished session to Google Sheets and Toggl.
+  /// Saves the finished session to the local history, then tries to sync it
+  /// (and any older unsynced sessions) to Google Sheets and Toggl.
   Future<SubmitResult> submit({
     required Map<String, String> answers,
     required bool includeOvertime,
@@ -116,23 +118,18 @@ class SessionController extends ChangeNotifier {
       hrSeries: _lastHrSeries,
     );
 
-    final sheetsConfigured = settings.sheetsWebhookUrl.trim().isNotEmpty;
-    final togglConfigured = settings.togglApiToken.trim().isNotEmpty;
-
-    final sheetsOk = sheetsConfigured ? await sheets.logSession(entry) : false;
-    final togglOk = togglConfigured
-        ? await toggl.logTimeEntry(
-            start: outcome.startedAt,
-            stop: outcome.endedAt,
-            description: settings.togglDescription,
-          )
-        : false;
+    final record = SessionRecord(
+      payload: entry.toSheetsPayload(),
+      togglDescription: settings.togglDescription,
+    );
+    await history.add(record);
+    await history.syncPending();
 
     return SubmitResult(
-      sheetsOk: sheetsOk,
-      togglOk: togglOk,
-      sheetsConfigured: sheetsConfigured,
-      togglConfigured: togglConfigured,
+      sheetsOk: record.sheetsSynced,
+      togglOk: record.togglSynced,
+      sheetsConfigured: history.isSheetsConfigured(),
+      togglConfigured: history.isTogglConfigured(),
     );
   }
 
