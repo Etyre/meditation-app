@@ -8,6 +8,10 @@ import 'services/clock.dart';
 enum SessionPhase {
   idle,
 
+  /// Optional pre-timer countdown; at zero the start gong rings and the
+  /// timer begins. Not counted as meditation time.
+  countdown,
+
   /// Timer counting down toward the gong, or (open-ended) counting up.
   running,
 
@@ -25,12 +29,19 @@ class SessionEngine extends ChangeNotifier {
   /// reference each other).
   void Function()? onGong;
 
-  SessionEngine({required this.clock, this.onGong});
+  /// Called exactly once when the pre-timer countdown reaches zero (time to
+  /// play the start gong and begin recording). Never called when the
+  /// session was started without a countdown.
+  void Function()? onCountdownDone;
+
+  SessionEngine({required this.clock, this.onGong, this.onCountdownDone});
 
   SessionPhase _phase = SessionPhase.idle;
   DateTime? _startedAt;
+  DateTime? _countdownStartedAt;
   DateTime? _gongAt;
   Duration _planned = Duration.zero;
+  Duration _countdown = Duration.zero;
   bool _openEnded = false;
   Timer? _ticker;
 
@@ -55,6 +66,15 @@ class SessionEngine extends ChangeNotifier {
       ? Duration.zero
       : clock.now().difference(_startedAt!);
 
+  /// Time left on the pre-timer countdown (zero outside that phase).
+  Duration get countdownRemaining {
+    if (_phase != SessionPhase.countdown || _countdownStartedAt == null) {
+      return Duration.zero;
+    }
+    final left = _countdown - clock.now().difference(_countdownStartedAt!);
+    return left.isNegative ? Duration.zero : left;
+  }
+
   /// Time since the gong (zero before the gong).
   Duration get overtime {
     if (_phase != SessionPhase.overtime || _gongAt == null) {
@@ -63,17 +83,36 @@ class SessionEngine extends ChangeNotifier {
     return clock.now().difference(_gongAt!);
   }
 
-  /// Starts a session. Pass null for an open-ended session: no countdown or
-  /// gong, just a stopwatch until [stop].
-  void start(Duration? planned) {
+  /// Starts a session. Pass null for an open-ended session: no end gong,
+  /// just a stopwatch until [stop]. A non-zero [countdown] inserts a
+  /// pre-timer countdown phase; the timer starts when it reaches zero.
+  void start(Duration? planned, {Duration countdown = Duration.zero}) {
     assert(_phase == SessionPhase.idle, 'session already in progress');
     assert(planned == null || planned > Duration.zero);
     _openEnded = planned == null;
     _planned = planned ?? Duration.zero;
-    _startedAt = clock.now();
+    _countdown = countdown;
     _gongAt = null;
-    _phase = SessionPhase.running;
+    if (countdown > Duration.zero) {
+      _countdownStartedAt = clock.now();
+      _startedAt = null;
+      _phase = SessionPhase.countdown;
+    } else {
+      _countdownStartedAt = null;
+      _startedAt = clock.now();
+      _phase = SessionPhase.running;
+    }
     _ticker = Timer.periodic(const Duration(milliseconds: 100), (_) => tick());
+    notifyListeners();
+  }
+
+  /// Abandons a session during the countdown (before any meditation
+  /// happened); there is no outcome to log.
+  void cancel() {
+    assert(_phase == SessionPhase.countdown, 'not in a countdown');
+    _ticker?.cancel();
+    _ticker = null;
+    _reset();
     notifyListeners();
   }
 
@@ -81,6 +120,13 @@ class SessionEngine extends ChangeNotifier {
   /// by tests.
   @visibleForTesting
   void tick() {
+    if (_phase == SessionPhase.countdown &&
+        clock.now().difference(_countdownStartedAt!) >= _countdown) {
+      // Anchor the timer to the countdown's exact end, not the tick time.
+      _startedAt = _countdownStartedAt!.add(_countdown);
+      _phase = SessionPhase.running;
+      onCountdownDone?.call();
+    }
     if (!_openEnded &&
         _phase == SessionPhase.running &&
         clock.now().difference(_startedAt!) >= _planned) {
@@ -95,7 +141,8 @@ class SessionEngine extends ChangeNotifier {
   /// Stops the session (either an early abort or the end of overtime) and
   /// returns what happened.
   SessionOutcome stop() {
-    assert(_phase != SessionPhase.idle, 'no session in progress');
+    assert(_phase == SessionPhase.running || _phase == SessionPhase.overtime,
+        'no session in progress (use cancel() during the countdown)');
     _ticker?.cancel();
     _ticker = null;
     final now = clock.now();
@@ -108,12 +155,18 @@ class SessionEngine extends ChangeNotifier {
       overtime: completed ? now.difference(_gongAt!) : Duration.zero,
       openEnded: _openEnded,
     );
-    _phase = SessionPhase.idle;
-    _startedAt = null;
-    _gongAt = null;
-    _openEnded = false;
+    _reset();
     notifyListeners();
     return outcome;
+  }
+
+  void _reset() {
+    _phase = SessionPhase.idle;
+    _startedAt = null;
+    _countdownStartedAt = null;
+    _countdown = Duration.zero;
+    _gongAt = null;
+    _openEnded = false;
   }
 
   @override

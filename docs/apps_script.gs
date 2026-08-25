@@ -21,6 +21,7 @@ var HEADER = [
   'Overtime (min)', 'Included overtime', 'Aborted', 'Open-ended',
   'Mean HR', 'Min HR', 'Max HR', 'Mean RR (ms)', 'SDNN (ms)', 'RMSSD (ms)',
   'ln(RMSSD)', 'HRV score', 'RR count', 'RR intervals (ms)', 'HR series',
+  'Baseline HR', 'Baseline HR window (s)', 'First 20s HR',
 ];
 
 // A Sheets cell holds at most 50,000 characters. Long sessions can exceed
@@ -43,6 +44,7 @@ function doPost(e) {
     data.meanHr, data.minHr, data.maxHr, data.meanRrMs, data.sdnnMs,
     data.rmssdMs, data.lnRmssd, data.hrvScore, data.rrCount,
     data.rrIntervalsMs, data.hrSeries,
+    data.baselineHr, data.baselineHrSeconds, data.first20sHr,
   ];
   HEADER.forEach(function (name, i) { values[name] = baseValues[i]; });
   Object.keys(answers).forEach(function (q) { values[q] = answers[q]; });

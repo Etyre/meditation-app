@@ -23,6 +23,9 @@ void main() {
         includeOvertime: true,
         answers: {'How was your focus? (1-5)': '4'},
         rrIntervalsMs: [800.0, 812.5],
+        baselineHr: 62,
+        baselineHrSeconds: 200,
+        first20sHr: 60,
       ).toSheetsPayload();
 
       expect(payload['plannedMinutes'], 20.0);
@@ -35,6 +38,9 @@ void main() {
       expect(payload['answers'], {'How was your focus? (1-5)': '4'});
       expect(payload['rrCount'], 2);
       expect(jsonDecode(payload['rrIntervalsMs'] as String), [800, 812.5]);
+      expect(payload['baselineHr'], 62);
+      expect(payload['baselineHrSeconds'], 200);
+      expect(payload['first20sHr'], 60);
     });
 
     test('aborted session logs actual elapsed as meditated time', () {
@@ -56,6 +62,9 @@ void main() {
       expect(payload['meditatedMinutes'], 6.0);
       expect(payload['hrvScore'], isNull);
       expect(payload['rrIntervalsMs'], '');
+      expect(payload['baselineHr'], isNull);
+      expect(payload['baselineHrSeconds'], isNull);
+      expect(payload['first20sHr'], isNull);
     });
   });
 

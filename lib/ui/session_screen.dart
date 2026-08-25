@@ -15,6 +15,7 @@ class SessionScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = context.watch<SessionController>();
     final engine = controller.engine;
+    final inCountdown = engine.phase == SessionPhase.countdown;
     final inOvertime = engine.phase == SessionPhase.overtime;
     final openEnded = engine.openEnded;
 
@@ -28,20 +29,24 @@ class SessionScreen extends StatelessWidget {
               children: [
                 const Spacer(flex: 2),
                 Text(
-                  openEnded
-                      ? 'meditating'
-                      : inOvertime
-                          ? 'sitting on'
-                          : 'remaining',
+                  inCountdown
+                      ? 'starting in'
+                      : openEnded
+                          ? 'meditating'
+                          : inOvertime
+                              ? 'sitting on'
+                              : 'remaining',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  openEnded
-                      ? formatMmSs(engine.elapsed)
-                      : inOvertime
-                          ? '+${formatMmSs(engine.overtime)}'
-                          : formatMmSs(engine.remaining),
+                  inCountdown
+                      ? formatMmSs(engine.countdownRemaining)
+                      : openEnded
+                          ? formatMmSs(engine.elapsed)
+                          : inOvertime
+                              ? '+${formatMmSs(engine.overtime)}'
+                              : formatMmSs(engine.remaining),
                   style: Theme.of(context).textTheme.displayLarge?.copyWith(
                         fontSize: 88,
                         fontWeight: FontWeight.w200,
@@ -62,13 +67,19 @@ class SessionScreen extends StatelessWidget {
                     textStyle: const TextStyle(fontSize: 20),
                   ),
                   onPressed: () {
-                    controller.stopSession();
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                          builder: (_) => const QuestionnaireScreen()),
-                    );
+                    if (inCountdown) {
+                      // Nothing to log yet — abandon and go home.
+                      controller.cancelSession();
+                      Navigator.of(context).popUntil((r) => r.isFirst);
+                    } else {
+                      controller.stopSession();
+                      Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(
+                            builder: (_) => const QuestionnaireScreen()),
+                      );
+                    }
                   },
-                  child: const Text('Stop'),
+                  child: Text(inCountdown ? 'Cancel' : 'Stop'),
                 ),
                 const SizedBox(height: 8),
               ],

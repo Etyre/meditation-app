@@ -55,6 +55,7 @@ Future<void> main() async {
     history: history,
   );
   engine.onGong = controller.handleGong;
+  engine.onCountdownDone = controller.handleCountdownDone;
 
   // Push any sessions recorded offline in earlier runs.
   history.syncPending();

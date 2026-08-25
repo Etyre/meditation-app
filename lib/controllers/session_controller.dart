@@ -59,18 +59,56 @@ class SessionController extends ChangeNotifier {
   List<List<num>> _lastHrSeries = const [];
   bool _hrWasRecorded = false;
   bool get hrWasRecorded => _hrWasRecorded;
+  int? _lastBaselineHr;
+  int? get lastBaselineHr => _lastBaselineHr;
+  int? _lastBaselineSeconds;
+  int? get lastBaselineSeconds => _lastBaselineSeconds;
+  int? _lastFirst20sHr;
+  int? get lastFirst20sHr => _lastFirst20sHr;
 
   /// Pass null for an open-ended session (stopwatch only, no gong).
+  /// A configured countdown delays the timer: heart rate sampled during it
+  /// becomes the pre-meditation baseline, and metronome + session recording
+  /// begin at the start gong.
   void startSession(Duration? planned) {
-    engine.start(planned);
+    final countdown =
+        Duration(seconds: settingsStore.settings.countdownSeconds);
+    engine.start(planned, countdown: countdown);
+    if (countdown > Duration.zero) {
+      if (heartRate.currentState == HrConnectionState.connected) {
+        recorder.startBaseline(heartRate.samples);
+      }
+    } else {
+      _beginMeditation();
+    }
+    WakelockPlus.enable();
+    notifyListeners();
+  }
+
+  /// Called by the engine's onCountdownDone hook (wired in main.dart):
+  /// countdown hit zero, so ring the start gong and begin the sit proper.
+  void handleCountdownDone() {
+    audio.playGong();
+    _beginMeditation();
+  }
+
+  void _beginMeditation() {
     metronome.start(settingsStore.settings.metronome);
     if (heartRate.currentState == HrConnectionState.connected) {
       recorder.start(heartRate.samples);
       _hrWasRecorded = true;
     } else {
+      // Also drop any baseline buffered before the strap dropped out.
+      recorder.discardBaseline();
       _hrWasRecorded = false;
     }
-    WakelockPlus.enable();
+  }
+
+  /// Abandons the session during the countdown: nothing is logged.
+  void cancelSession() {
+    engine.cancel();
+    recorder.discardBaseline();
+    WakelockPlus.disable();
     notifyListeners();
   }
 
@@ -90,6 +128,9 @@ class SessionController extends ChangeNotifier {
     _lastRr = recorder.rrIntervalsMs;
     _lastHrSeries = recorder.hrSeries;
     _lastHrv = _hrWasRecorded ? recorder.computeSummary() : null;
+    _lastBaselineHr = _hrWasRecorded ? recorder.baselineHr : null;
+    _lastBaselineSeconds = _hrWasRecorded ? recorder.baselineSeconds : null;
+    _lastFirst20sHr = _hrWasRecorded ? recorder.first20sHr : null;
     notifyListeners();
     return outcome;
   }
@@ -116,6 +157,9 @@ class SessionController extends ChangeNotifier {
       hrv: _lastHrv,
       rrIntervalsMs: _lastRr,
       hrSeries: _lastHrSeries,
+      baselineHr: _lastBaselineHr,
+      baselineHrSeconds: _lastBaselineSeconds,
+      first20sHr: _lastFirst20sHr,
     );
 
     final record = SessionRecord(

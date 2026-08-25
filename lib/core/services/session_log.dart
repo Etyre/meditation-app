@@ -21,6 +21,15 @@ class SessionLogEntry {
   /// Per-notification heart rate readings as (secondsIntoSession, bpm).
   final List<List<num>> hrSeries;
 
+  /// Average HR over the minutes just before the timer started (the
+  /// pre-meditation resting baseline), and how many seconds it covers.
+  final int? baselineHr;
+  final int? baselineHrSeconds;
+
+  /// Average HR over the first 20 seconds of the session — the fallback
+  /// baseline when the timer was started immediately.
+  final int? first20sHr;
+
   const SessionLogEntry({
     required this.outcome,
     required this.includeOvertime,
@@ -28,6 +37,9 @@ class SessionLogEntry {
     this.hrv,
     this.rrIntervalsMs = const [],
     this.hrSeries = const [],
+    this.baselineHr,
+    this.baselineHrSeconds,
+    this.first20sHr,
   });
 
   /// The JSON body POSTed to the Google Apps Script webhook.
@@ -52,6 +64,9 @@ class SessionLogEntry {
       'rmssdMs': hrv?.rmssdMs,
       'lnRmssd': hrv?.lnRmssd,
       'hrvScore': hrv?.score,
+      'baselineHr': baselineHr,
+      'baselineHrSeconds': baselineHrSeconds,
+      'first20sHr': first20sHr,
       'rrCount': rrIntervalsMs.length,
       'rrIntervalsMs':
           rrIntervalsMs.isEmpty ? '' : jsonEncode(_rounded(rrIntervalsMs)),

@@ -7,6 +7,7 @@ import '../core/models/metronome_config.dart';
 import '../infra/storage/settings_store.dart';
 import '../infra/toggl/toggl_api_service.dart';
 import 'hr_connect_sheet.dart';
+import 'questions_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -116,6 +117,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _update(settings.copyWith(defaultTimerMinutes: v));
                 }
               },
+            ),
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Countdown before start'),
+            subtitle: const Text(
+                'Settle in first; the gong rings and the timer starts at zero'),
+            trailing: SizedBox(
+              width: 88,
+              child: TextFormField(
+                initialValue: '${settings.countdownSeconds.clamp(0, 90)}',
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                decoration: const InputDecoration(
+                  suffixText: 's',
+                  helperText: '0–90',
+                  isDense: true,
+                ),
+                onChanged: (v) {
+                  final secs = int.tryParse(v.trim());
+                  if (secs != null && secs >= 0 && secs <= 90) {
+                    _update(settings.copyWith(countdownSeconds: secs));
+                  }
+                },
+              ),
             ),
           ),
           const Divider(height: 32),
@@ -250,45 +276,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const Divider(height: 32),
           _sectionTitle('Post-session questions'),
-          for (var i = 0; i < settings.questions.length; i++)
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(settings.questions[i]),
-              trailing: IconButton(
-                icon: const Icon(Icons.delete_outline),
-                onPressed: () {
-                  final next = [...settings.questions]..removeAt(i);
-                  _update(settings.copyWith(questions: next));
-                },
-              ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Edit questions'),
+            subtitle: Text(settings.questions.isEmpty
+                ? 'None configured'
+                : settings.questions.length == 1
+                    ? '1 question'
+                    : '${settings.questions.length} questions'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const QuestionsScreen()),
             ),
-          TextButton.icon(
-            icon: const Icon(Icons.add),
-            label: const Text('Add question'),
-            onPressed: () async {
-              final controller = TextEditingController();
-              final text = await showDialog<String>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('New question'),
-                  content: TextField(
-                      controller: controller, autofocus: true),
-                  actions: [
-                    TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: const Text('Cancel')),
-                    TextButton(
-                        onPressed: () =>
-                            Navigator.pop(ctx, controller.text.trim()),
-                        child: const Text('Add')),
-                  ],
-                ),
-              );
-              if (text != null && text.isNotEmpty) {
-                _update(settings
-                    .copyWith(questions: [...settings.questions, text]));
-              }
-            },
           ),
           const SizedBox(height: 32),
         ],
@@ -328,17 +327,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(width: 12),
           SizedBox(
-            width: 130,
-            child: DropdownButton<int>(
-              isExpanded: true,
-              value: _nearestGap(step.gapMs),
-              items: [
-                for (final ms in _gapChoices)
-                  DropdownMenuItem(
-                      value: ms, child: Text(_gapLabel(ms))),
-              ],
+            width: 88,
+            child: TextFormField(
+              // Recreate the field when steps are added/removed so it always
+              // shows that row's current value.
+              key: ValueKey('gap-$i-${settings.metronome.steps.length}'),
+              initialValue: '${_gapSeconds(step.gapMs)}',
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              decoration: const InputDecoration(
+                suffixText: 's',
+                helperText: '1–90',
+                isDense: true,
+              ),
               onChanged: (v) {
-                if (v != null) replaceStep(step.copyWith(gapMs: v));
+                final secs = int.tryParse(v.trim());
+                if (secs != null && secs >= 1 && secs <= 90) {
+                  replaceStep(step.copyWith(gapMs: secs * 1000));
+                }
               },
             ),
           ),
@@ -359,19 +365,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  static const _gapChoices = [
-    250, 500, 750, 1000, 1500, 2000, 3000, 4000, 5000, 8000, 10000, 15000,
-    20000, 30000, 60000,
-  ];
-
-  static int _nearestGap(int ms) => _gapChoices
-      .reduce((a, b) => (a - ms).abs() <= (b - ms).abs() ? a : b);
-
-  static String _gapLabel(int ms) => ms < 1000
-      ? '$ms ms'
-      : ms % 60000 == 0
-          ? '${ms ~/ 60000} min'
-          : '${ms % 1000 == 0 ? ms ~/ 1000 : ms / 1000} s';
+  /// Gap shown/edited in whole seconds (any integer 1–90); stored as ms.
+  static int _gapSeconds(int ms) => (ms / 1000).round().clamp(1, 90);
 
   Widget _sectionTitle(String text) => Padding(
         padding: const EdgeInsets.only(bottom: 8),

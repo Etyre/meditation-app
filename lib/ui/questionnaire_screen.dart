@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/session_controller.dart';
+import '../core/models/question.dart';
 import '../infra/storage/settings_store.dart';
 import 'format.dart';
 
@@ -15,16 +16,33 @@ class QuestionnaireScreen extends StatefulWidget {
 }
 
 class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
+  late final List<Question> _questions;
   late final List<TextEditingController> _answerControllers;
+  final Map<int, String> _choices = {};
+
+  /// Sentinel stored in [_choices] when the "Other…" chip is selected; the
+  /// written-in text then lives in the question's [_answerControllers] entry.
+  static const _otherChoice = '\u0000other';
   bool _includeOvertime = true;
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
-    final questions = context.read<SettingsStore>().settings.questions;
+    _questions = context.read<SettingsStore>().settings.questions;
     _answerControllers =
-        [for (final _ in questions) TextEditingController()];
+        [for (final _ in _questions) TextEditingController()];
+  }
+
+  String _answerFor(int i) {
+    final q = _questions[i];
+    if (!q.isMultipleChoice) return _answerControllers[i].text.trim();
+    final choice = _choices[i];
+    if (choice == _otherChoice) {
+      final written = _answerControllers[i].text.trim();
+      return written.isEmpty ? 'Other' : written;
+    }
+    return choice ?? '';
   }
 
   @override
@@ -37,12 +55,11 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
 
   Future<void> _save() async {
     final controller = context.read<SessionController>();
-    final questions = context.read<SettingsStore>().settings.questions;
     setState(() => _saving = true);
     final result = await controller.submit(
       answers: {
-        for (var i = 0; i < questions.length; i++)
-          questions[i]: _answerControllers[i].text.trim(),
+        for (var i = 0; i < _questions.length; i++)
+          _questions[i].text: _answerFor(i),
       },
       includeOvertime: _includeOvertime,
     );
@@ -66,7 +83,6 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
     final controller = context.read<SessionController>();
     final outcome = controller.lastOutcome;
     final hrv = controller.lastHrv;
-    final questions = context.watch<SettingsStore>().settings.questions;
     if (outcome == null) {
       return const Scaffold(body: Center(child: Text('No session data')));
     }
@@ -113,7 +129,9 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
                 ),
               ),
             ),
-            if (hrv != null)
+            if (hrv != null ||
+                controller.lastBaselineHr != null ||
+                controller.lastFirst20sHr != null)
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -123,32 +141,32 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
                       Text('Heart rate',
                           style: Theme.of(context).textTheme.titleMedium),
                       const SizedBox(height: 8),
-                      _row('HRV score', '${hrv.score}'),
-                      _row('RMSSD', '${hrv.rmssdMs} ms'),
-                      _row('SDNN', '${hrv.sdnnMs} ms'),
-                      _row('Heart rate',
-                          '${hrv.meanHr} avg · ${hrv.minHr}–${hrv.maxHr} bpm'),
-                      _row('Beats recorded', '${hrv.rrCount}'),
+                      if (controller.lastBaselineHr != null)
+                        _row(
+                            'Baseline (pre-timer)',
+                            '${controller.lastBaselineHr} bpm over '
+                                '${formatMmSs(Duration(seconds: controller.lastBaselineSeconds ?? 0))}'),
+                      if (controller.lastFirst20sHr != null)
+                        _row('First 20 s of sit',
+                            '${controller.lastFirst20sHr} bpm'),
+                      if (hrv != null) ...[
+                        _row('HRV score', '${hrv.score}'),
+                        _row('RMSSD', '${hrv.rmssdMs} ms'),
+                        _row('SDNN', '${hrv.sdnnMs} ms'),
+                        _row('Heart rate',
+                            '${hrv.meanHr} avg · ${hrv.minHr}–${hrv.maxHr} bpm'),
+                        _row('Beats recorded', '${hrv.rrCount}'),
+                      ],
                     ],
                   ),
                 ),
               ),
             const SizedBox(height: 8),
-            for (var i = 0; i < questions.length; i++) ...[
+            for (var i = 0; i < _questions.length; i++)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
-                child: TextField(
-                  controller: _answerControllers[i],
-                  decoration: InputDecoration(
-                    labelText: questions[i],
-                    border: const OutlineInputBorder(),
-                  ),
-                  maxLines: questions[i].toLowerCase().contains('note')
-                      ? 3
-                      : 1,
-                ),
+                child: _questionField(i),
               ),
-            ],
             const SizedBox(height: 16),
             FilledButton(
               style: FilledButton.styleFrom(
@@ -170,6 +188,72 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _questionField(int i) {
+    final q = _questions[i];
+    if (!q.isMultipleChoice) {
+      return TextField(
+        controller: _answerControllers[i],
+        decoration: InputDecoration(
+          labelText: q.text,
+          border: const OutlineInputBorder(),
+        ),
+        maxLines: q.text.toLowerCase().contains('note') ? 3 : 1,
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(q.text, style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            for (final option in q.options)
+              ChoiceChip(
+                label: Text(option),
+                selected: _choices[i] == option,
+                onSelected: (selected) => setState(() {
+                  if (selected) {
+                    _choices[i] = option;
+                  } else {
+                    _choices.remove(i);
+                  }
+                }),
+              ),
+            if (q.allowOther)
+              ChoiceChip(
+                label: const Text('Other…'),
+                selected: _choices[i] == _otherChoice,
+                onSelected: (selected) => setState(() {
+                  if (selected) {
+                    _choices[i] = _otherChoice;
+                  } else {
+                    _choices.remove(i);
+                  }
+                }),
+              ),
+          ],
+        ),
+        if (q.allowOther && _choices[i] == _otherChoice)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: TextField(
+              controller: _answerControllers[i],
+              autofocus: true,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Other',
+                hintText: 'Type your answer',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+          ),
+      ],
     );
   }
 

@@ -106,6 +106,86 @@ void main() {
       });
     });
 
+    test('countdown runs first; at zero the start gong rings and the timer '
+        'begins', () {
+      fakeAsync((async) {
+        final clock = FakeClock();
+        var startGongs = 0, endGongs = 0;
+        final engine = SessionEngine(clock: clock, onGong: () => endGongs++);
+        engine.onCountdownDone = () => startGongs++;
+
+        engine.start(const Duration(minutes: 10),
+            countdown: const Duration(seconds: 30));
+        expect(engine.phase, SessionPhase.countdown);
+        expect(engine.countdownRemaining, const Duration(seconds: 30));
+        expect(engine.elapsed, Duration.zero);
+
+        clock.advance(const Duration(seconds: 20));
+        async.elapse(const Duration(seconds: 20));
+        expect(engine.phase, SessionPhase.countdown);
+        expect(engine.countdownRemaining, const Duration(seconds: 10));
+        expect(startGongs, 0);
+
+        clock.advance(const Duration(seconds: 10));
+        async.elapse(const Duration(seconds: 10));
+        expect(engine.phase, SessionPhase.running);
+        expect(startGongs, 1);
+        expect(endGongs, 0);
+        expect(engine.remaining, const Duration(minutes: 10));
+
+        clock.advance(const Duration(minutes: 10, seconds: 5));
+        async.elapse(const Duration(minutes: 10, seconds: 5));
+        expect(endGongs, 1);
+        expect(startGongs, 1);
+
+        final outcome = engine.stop();
+        // The countdown is not meditation time.
+        expect(outcome.completedTimer, isTrue);
+        expect(outcome.actualElapsed,
+            const Duration(minutes: 10, seconds: 5));
+        expect(outcome.overtime, const Duration(seconds: 5));
+      });
+    });
+
+    test('cancelling during the countdown returns to idle with no outcome',
+        () {
+      fakeAsync((async) {
+        final clock = FakeClock();
+        var startGongs = 0;
+        final engine = SessionEngine(clock: clock);
+        engine.onCountdownDone = () => startGongs++;
+
+        engine.start(const Duration(minutes: 10),
+            countdown: const Duration(seconds: 30));
+        clock.advance(const Duration(seconds: 10));
+        async.elapse(const Duration(seconds: 10));
+        engine.cancel();
+        expect(engine.phase, SessionPhase.idle);
+        expect(startGongs, 0);
+
+        // A fresh session (no countdown) starts normally afterwards.
+        engine.start(const Duration(minutes: 5));
+        expect(engine.phase, SessionPhase.running);
+        expect(startGongs, 0);
+        engine.stop();
+      });
+    });
+
+    test('zero countdown skips the countdown phase and start gong', () {
+      fakeAsync((async) {
+        final clock = FakeClock();
+        var startGongs = 0;
+        final engine = SessionEngine(clock: clock);
+        engine.onCountdownDone = () => startGongs++;
+        engine.start(const Duration(minutes: 5));
+        expect(engine.phase, SessionPhase.running);
+        clock.advance(const Duration(minutes: 1));
+        async.elapse(const Duration(minutes: 1));
+        expect(startGongs, 0);
+        engine.stop();
+      });
+    });
+
     test('gong fires only once even as ticks continue', () {
       fakeAsync((async) {
         final clock = FakeClock();

@@ -12,8 +12,16 @@ with Flutter.
   amount.
 - **Early abort** — pressing Stop before the gong records the time actually
   sat (shorter than the timer length) and marks the session aborted.
-- **Post-session questions** — configurable questions after each session;
-  answers are logged with the session.
+- **Post-session questions** — configurable questions after each session
+  (Settings → Post-session questions → Edit questions). Each question is
+  either free answer or multiple choice (optionally with an "Other…" choice
+  that takes a written-in answer); drag to reorder. Answers are logged with
+  the session.
+- **Countdown before start** — optional (Settings → Timer): pressing Begin
+  first runs a countdown to settle in; at zero the gong rings and the timer
+  starts. Heart rate sampled during the countdown is logged as the
+  pre-meditation baseline (plus, as a fallback, the average over the first
+  20 seconds of the sit).
 - **Google Sheets logging** — start/stop time, planned timer length,
   meditated minutes, overtime, abort flag, your answers, and heart data are
   appended as a row to your sheet.
@@ -39,7 +47,8 @@ non-Flutter port would only replace the thin outer layers:
   storage.
 - `lib/controllers/` — `SessionController` wires the engine to audio,
   metronome, HR recording, and logging.
-- `lib/ui/` — the screens (home, session, questionnaire, settings).
+- `lib/ui/` — the screens (home, session, questionnaire, settings,
+  question editor).
 - `test/` — unit tests for all the core logic.
 
 ## Building
@@ -58,6 +67,18 @@ flutter build apk     # the Android version
 First iOS device build: open `ios/Runner.xcworkspace` in Xcode once to set
 your signing team (Runner target → Signing & Capabilities), then
 `flutter run`.
+
+To update an already-installed phone build without losing its on-device
+data (settings, local history), use `tool/phone.sh deploy` — it snapshots
+the app's data, builds, and installs in place via `devicectl`. Do **not**
+use `flutter install`, which uninstalls first and wipes the data.
+`tool/phone.sh backup` / `restore` copy the app's data off/onto the phone
+(everything is one SharedPreferences plist); backups land in
+`~/Library/Application Support/meditation-app-backups/`.
+
+If the project lives in an iCloud-synced folder (e.g. `~/Documents`),
+codesign may reject the Flutter framework ("detritus not allowed"). Point
+`build/` outside iCloud: `rm -rf build && ln -s ~/Library/Caches/<name> build`.
 
 ## Integration setup
 

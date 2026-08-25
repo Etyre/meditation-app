@@ -1,8 +1,14 @@
 import 'metronome_config.dart';
+import 'question.dart';
 
 /// All user-configurable settings, persisted as JSON.
 class AppSettings {
   final int defaultTimerMinutes;
+
+  /// Pre-timer countdown length in seconds; 0 disables it. While it runs,
+  /// heart rate is sampled as the pre-meditation baseline; at zero the gong
+  /// rings and the timer starts.
+  final int countdownSeconds;
   final MetronomeConfig metronome;
 
   /// Google Apps Script "web app" URL that appends a row to the sheet.
@@ -23,7 +29,7 @@ class AppSettings {
   final String togglProjectName;
 
   /// Questions asked after each session; answers are logged to the sheet.
-  final List<String> questions;
+  final List<Question> questions;
 
   /// Remembered heart rate monitor so the app can reconnect quickly.
   final String lastHrDeviceId;
@@ -31,6 +37,7 @@ class AppSettings {
 
   const AppSettings({
     this.defaultTimerMinutes = 20,
+    this.countdownSeconds = 0,
     this.metronome = MetronomeConfig.defaults,
     this.sheetsWebhookUrl = '',
     this.togglApiToken = '',
@@ -43,14 +50,23 @@ class AppSettings {
     this.lastHrDeviceName = '',
   });
 
-  static const List<String> defaultQuestions = [
-    'How was your focus? (1-5)',
-    'How calm do you feel? (1-5)',
-    'Notes',
+  static const List<Question> defaultQuestions = [
+    Question(
+      text: 'How was your focus? (1-5)',
+      type: QuestionType.multipleChoice,
+      options: ['1', '2', '3', '4', '5'],
+    ),
+    Question(
+      text: 'How calm do you feel? (1-5)',
+      type: QuestionType.multipleChoice,
+      options: ['1', '2', '3', '4', '5'],
+    ),
+    Question.freeText('Notes'),
   ];
 
   AppSettings copyWith({
     int? defaultTimerMinutes,
+    int? countdownSeconds,
     MetronomeConfig? metronome,
     String? sheetsWebhookUrl,
     String? togglApiToken,
@@ -58,12 +74,13 @@ class AppSettings {
     String? togglDescription,
     int? togglProjectId,
     String? togglProjectName,
-    List<String>? questions,
+    List<Question>? questions,
     String? lastHrDeviceId,
     String? lastHrDeviceName,
   }) =>
       AppSettings(
         defaultTimerMinutes: defaultTimerMinutes ?? this.defaultTimerMinutes,
+        countdownSeconds: countdownSeconds ?? this.countdownSeconds,
         metronome: metronome ?? this.metronome,
         sheetsWebhookUrl: sheetsWebhookUrl ?? this.sheetsWebhookUrl,
         togglApiToken: togglApiToken ?? this.togglApiToken,
@@ -78,6 +95,7 @@ class AppSettings {
 
   Map<String, dynamic> toJson() => {
         'defaultTimerMinutes': defaultTimerMinutes,
+        'countdownSeconds': countdownSeconds,
         'metronome': metronome.toJson(),
         'sheetsWebhookUrl': sheetsWebhookUrl,
         'togglApiToken': togglApiToken,
@@ -85,7 +103,7 @@ class AppSettings {
         'togglDescription': togglDescription,
         'togglProjectId': togglProjectId,
         'togglProjectName': togglProjectName,
-        'questions': questions,
+        'questions': [for (final q in questions) q.toJson()],
         'lastHrDeviceId': lastHrDeviceId,
         'lastHrDeviceName': lastHrDeviceName,
       };
@@ -94,6 +112,7 @@ class AppSettings {
     if (json == null) return const AppSettings();
     return AppSettings(
       defaultTimerMinutes: (json['defaultTimerMinutes'] as num?)?.toInt() ?? 20,
+      countdownSeconds: (json['countdownSeconds'] as num?)?.toInt() ?? 0,
       metronome: MetronomeConfig.fromJson(
           (json['metronome'] as Map?)?.cast<String, dynamic>()),
       sheetsWebhookUrl: json['sheetsWebhookUrl'] as String? ?? '',
@@ -102,7 +121,9 @@ class AppSettings {
       togglDescription: json['togglDescription'] as String? ?? 'Meditation',
       togglProjectId: (json['togglProjectId'] as num?)?.toInt() ?? 0,
       togglProjectName: json['togglProjectName'] as String? ?? '',
-      questions: (json['questions'] as List?)?.cast<String>() ??
+      questions: (json['questions'] as List?)
+              ?.map(Question.fromJson)
+              .toList() ??
           defaultQuestions,
       lastHrDeviceId: json['lastHrDeviceId'] as String? ?? '',
       lastHrDeviceName: json['lastHrDeviceName'] as String? ?? '',
