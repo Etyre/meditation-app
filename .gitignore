@@ -43,3 +43,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local device UDID for tool/phone.sh (personal, untracked)
+tool/.device

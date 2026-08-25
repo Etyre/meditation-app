@@ -22,7 +22,11 @@
 #   ~/Library/Application Support/meditation-app-backups/<timestamp>/
 set -euo pipefail
 
-DEVICE="${MEDITATION_DEVICE_ID:-}"
+# Device UDID: from $MEDITATION_DEVICE_ID, else the untracked tool/.device
+# file (one line, the UDID from Finder or `xcrun devicectl list devices`).
+ROOT_EARLY="$(cd "$(dirname "$0")/.." && pwd)"
+DEVICE="${MEDITATION_DEVICE_ID:-$(cat "$ROOT_EARLY/tool/.device" 2>/dev/null || true)}"
+[ -n "$DEVICE" ] || { echo "Set MEDITATION_DEVICE_ID or put the device UDID in tool/.device" >&2; exit 1; }
 BUNDLE="com.elityre.meditationTimer"
 PLIST_REL="Library/Preferences/$BUNDLE.plist"
 BACKUP_ROOT="$HOME/Library/Application Support/meditation-app-backups"
