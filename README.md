@@ -120,3 +120,14 @@ connected when you press Begin, the session records HR/HRV automatically.
 - Audio assets in `assets/audio/` are synthesized (script preserved in
   `tool/gen_sounds.py`); regenerate or replace them with your own recordings
   freely — same filenames.
+
+## Repository history note
+
+On 2026-09-02, before the repo was made public, its history was rewritten
+with `git filter-branch` to remove a personal iPhone UDID that had been
+hardcoded as the default `DEVICE` in `tool/phone.sh` (commits "Countdown
+start w/ HR baseline…" through "phone.sh: read device UDID…"). In the
+rewritten commits that line reads `DEVICE="${MEDITATION_DEVICE_ID:-}"`;
+nothing else changed, and the final tree is identical to the original.
+The device ID now comes from the `MEDITATION_DEVICE_ID` environment
+variable or the git-ignored `tool/.device` file.
