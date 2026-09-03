@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -18,6 +20,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   late TextEditingController _sheetsUrl;
+  late TextEditingController _sheetsSecret;
   late TextEditingController _togglToken;
   late TextEditingController _togglDescription;
   late Metronome _metronome;
@@ -30,6 +33,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _metronome = context.read<Metronome>();
     final s = context.read<SettingsStore>().settings;
     _sheetsUrl = TextEditingController(text: s.sheetsWebhookUrl);
+    _sheetsSecret = TextEditingController(text: s.sheetsSecret);
     _togglToken = TextEditingController(text: s.togglApiToken);
     _togglDescription = TextEditingController(text: s.togglDescription);
   }
@@ -37,6 +41,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void dispose() {
     _sheetsUrl.dispose();
+    _sheetsSecret.dispose();
     _togglToken.dispose();
     _togglDescription.dispose();
     _metronome.stop();
@@ -46,6 +51,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   SettingsStore get _store => context.read<SettingsStore>();
 
   void _update(AppSettings next) => _store.update(next);
+
+  /// Fills in a fresh 32-character alphanumeric secret.
+  void _generateSheetsSecret() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+    final rng = Random.secure();
+    final secret = String.fromCharCodes(
+        List.generate(32, (_) => chars.codeUnitAt(rng.nextInt(chars.length))));
+    _sheetsSecret.text = secret;
+    _update(_store.settings.copyWith(sheetsSecret: secret));
+  }
 
   Future<void> _pickTogglProject() async {
     final toggl = context.read<TogglApiService>();
@@ -221,6 +236,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             onChanged: (v) =>
                 _update(_store.settings.copyWith(sheetsWebhookUrl: v)),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _sheetsSecret,
+            autocorrect: false,
+            enableSuggestions: false,
+            decoration: InputDecoration(
+              labelText: 'Shared secret',
+              helperText: 'Must match the SECRET script property in Apps '
+                  'Script; posts without it are rejected. Optional.',
+              helperMaxLines: 3,
+              border: const OutlineInputBorder(),
+              suffixIcon: IconButton(
+                tooltip: 'Generate a random secret',
+                icon: const Icon(Icons.casino_outlined),
+                onPressed: _generateSheetsSecret,
+              ),
+            ),
+            onChanged: (v) =>
+                _update(_store.settings.copyWith(sheetsSecret: v)),
           ),
           const Divider(height: 32),
           _sectionTitle('Toggl'),

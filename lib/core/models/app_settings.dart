@@ -14,6 +14,11 @@ class AppSettings {
   /// Google Apps Script "web app" URL that appends a row to the sheet.
   final String sheetsWebhookUrl;
 
+  /// Shared secret sent with every upload; the Apps Script rejects posts
+  /// that don't carry the same value (its SECRET script property). Empty
+  /// means the URL alone is the credential.
+  final String sheetsSecret;
+
   /// Toggl Track API token (from https://track.toggl.com/profile).
   final String togglApiToken;
 
@@ -40,6 +45,7 @@ class AppSettings {
     this.countdownSeconds = 0,
     this.metronome = MetronomeConfig.defaults,
     this.sheetsWebhookUrl = '',
+    this.sheetsSecret = '',
     this.togglApiToken = '',
     this.togglWorkspaceId = 0,
     this.togglDescription = 'Meditation',
@@ -69,6 +75,7 @@ class AppSettings {
     int? countdownSeconds,
     MetronomeConfig? metronome,
     String? sheetsWebhookUrl,
+    String? sheetsSecret,
     String? togglApiToken,
     int? togglWorkspaceId,
     String? togglDescription,
@@ -83,6 +90,7 @@ class AppSettings {
         countdownSeconds: countdownSeconds ?? this.countdownSeconds,
         metronome: metronome ?? this.metronome,
         sheetsWebhookUrl: sheetsWebhookUrl ?? this.sheetsWebhookUrl,
+        sheetsSecret: sheetsSecret ?? this.sheetsSecret,
         togglApiToken: togglApiToken ?? this.togglApiToken,
         togglWorkspaceId: togglWorkspaceId ?? this.togglWorkspaceId,
         togglDescription: togglDescription ?? this.togglDescription,
@@ -98,6 +106,7 @@ class AppSettings {
         'countdownSeconds': countdownSeconds,
         'metronome': metronome.toJson(),
         'sheetsWebhookUrl': sheetsWebhookUrl,
+        'sheetsSecret': sheetsSecret,
         'togglApiToken': togglApiToken,
         'togglWorkspaceId': togglWorkspaceId,
         'togglDescription': togglDescription,
@@ -116,6 +125,7 @@ class AppSettings {
       metronome: MetronomeConfig.fromJson(
           (json['metronome'] as Map?)?.cast<String, dynamic>()),
       sheetsWebhookUrl: json['sheetsWebhookUrl'] as String? ?? '',
+      sheetsSecret: json['sheetsSecret'] as String? ?? '',
       togglApiToken: json['togglApiToken'] as String? ?? '',
       togglWorkspaceId: (json['togglWorkspaceId'] as num?)?.toInt() ?? 0,
       togglDescription: json['togglDescription'] as String? ?? 'Meditation',

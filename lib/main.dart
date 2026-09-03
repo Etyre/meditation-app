@@ -29,7 +29,9 @@ Future<void> main() async {
   final metronome = Metronome(audio);
   final recorder = HrRecorder(clock: clock);
   final sheets = WebhookSheetsLogger(
-      getUrl: () => settingsStore.settings.sheetsWebhookUrl);
+    getUrl: () => settingsStore.settings.sheetsWebhookUrl,
+    getSecret: () => settingsStore.settings.sheetsSecret,
+  );
   final toggl = TogglApiService(
     getApiToken: () => settingsStore.settings.togglApiToken,
     getWorkspaceId: () => settingsStore.settings.togglWorkspaceId,

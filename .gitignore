@@ -44,5 +44,29 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-# Local device UDID for tool/phone.sh (personal, untracked)
+# Private / local-only configuration. Nothing here should ever be committed:
+# the Sheets webhook URL is the only thing guarding the spreadsheet, and the
+# Toggl token grants full account access. Both live in the app's on-device
+# settings, not in this repo; keep any local copies in these ignored paths.
+# iPhone UDID for tool/phone.sh
 tool/.device
+# scratch space for anything personal (URLs, tokens, exports)
+private/
+.env
+.env.*
+*.secret
+*.secrets.*
+secrets.*
+# App data pulled off the phone (contains the webhook URL + Toggl token)
+*.plist.bak
+*backup*.plist
+meditation-app-backups/
+# Google credentials, if ever added
+**/GoogleService-Info.plist
+**/google-services.json
+**/client_secret*.json
+**/service-account*.json
+# Android signing
+android/key.properties
+**/*.keystore
+**/*.jks

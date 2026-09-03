@@ -86,8 +86,13 @@ codesign may reject the Flutter framework ("detritus not allowed"). Point
 
 1. Create a Google Sheet.
 2. Extensions → Apps Script → paste `docs/apps_script.gs`.
-3. Deploy → New deployment → Web app, execute as **Me**, access **Anyone**.
-4. Copy the `/exec` URL into the app: Settings → Google Sheets.
+3. Project Settings → Script properties → add `SECRET` with a long random
+   value (the app can generate one: Settings → Google Sheets → dice icon).
+   The script rejects any post that doesn't carry it, so the sheet stays
+   yours even if the URL leaks.
+4. Deploy → New deployment → Web app, execute as **Me**, access **Anyone**.
+5. Copy the `/exec` URL and the same secret into the app: Settings →
+   Google Sheets.
 
 Rows are appended with headers created automatically, including one column
 per question. Failed uploads (no network) are queued on the phone and

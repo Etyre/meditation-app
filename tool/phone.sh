@@ -69,8 +69,9 @@ history = [json.loads(x) for x in prefs.get("flutter.session_history", [])]
 json.dump(settings, open(d / "settings.json", "w"), indent=2)
 json.dump(history, open(d / "session_history.json", "w"), indent=2)
 redacted = dict(settings)
-if redacted.get("togglApiToken"):
-    redacted["togglApiToken"] = "<set, %d chars>" % len(redacted["togglApiToken"])
+for k in ("togglApiToken", "sheetsSecret"):
+    if redacted.get(k):
+        redacted[k] = "<set, %d chars>" % len(redacted[k])
 print("settings:", json.dumps(redacted, indent=2))
 print("local sessions:", len(history))
 PY

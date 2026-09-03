@@ -5,15 +5,19 @@
  * Setup (one time, ~2 minutes):
  *  1. Create a Google Sheet (e.g. "Meditation Log").
  *  2. Extensions → Apps Script, delete the boilerplate, paste this file.
- *  3. Deploy → New deployment → type "Web app".
+ *  3. Project Settings (gear icon) → Script properties → Add property:
+ *       Property: SECRET   Value: any long random string
+ *     Posts that don't carry this exact value are rejected. (Leaving it
+ *     unset accepts any post that reaches the URL.)
+ *  4. Deploy → New deployment → type "Web app".
  *       - Execute as: Me
- *       - Who has access: Anyone (the URL is an unguessable secret;
- *         only someone with the exact URL can post)
- *  4. Copy the web app URL (ends in /exec) and paste it into the app's
- *     Settings → Google Sheets.
+ *       - Who has access: Anyone (the URL is unguessable, and the SECRET
+ *         above is checked on every post)
+ *  5. Copy the web app URL (ends in /exec) and paste it into the app's
+ *     Settings → Google Sheets, along with the same secret.
  *
  * To update the script later: paste changes, then Deploy → Manage
- * deployments → edit → New version (the URL stays the same).
+ * deployments → edit → New version (the URL and secret stay the same).
  */
 
 var HEADER = [
@@ -32,6 +36,15 @@ var CELL_LIMIT = 45000;
 
 function doPost(e) {
   var data = JSON.parse(e.postData.contents);
+
+  var secret = PropertiesService.getScriptProperties().getProperty('SECRET');
+  if (secret && data.secret !== secret) {
+    return ContentService.createTextOutput(
+      JSON.stringify({ ok: false, error: 'bad secret' })
+    ).setMimeType(ContentService.MimeType.JSON);
+  }
+  delete data.secret;
+
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
   var answers = data.answers || {};
 
