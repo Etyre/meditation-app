@@ -34,7 +34,17 @@ class SessionEngine extends ChangeNotifier {
   /// session was started without a countdown.
   void Function()? onCountdownDone;
 
-  SessionEngine({required this.clock, this.onGong, this.onCountdownDone});
+  /// Called when an interval gong comes due, with its index into the list
+  /// passed to [start]. Each fires at most once; if several come due on the
+  /// same tick (e.g. the app was suspended), only the latest one fires.
+  void Function(int index)? onIntervalGong;
+
+  SessionEngine({
+    required this.clock,
+    this.onGong,
+    this.onCountdownDone,
+    this.onIntervalGong,
+  });
 
   SessionPhase _phase = SessionPhase.idle;
   DateTime? _startedAt;
@@ -43,6 +53,10 @@ class SessionEngine extends ChangeNotifier {
   Duration _planned = Duration.zero;
   Duration _countdown = Duration.zero;
   bool _openEnded = false;
+
+  /// Interval gongs still to ring, as (index, time into the sit), sorted by
+  /// time. Entries are dropped from the front as they fire.
+  List<(int, Duration)> _pendingIntervals = const [];
   Timer? _ticker;
 
   SessionPhase get phase => _phase;
@@ -86,13 +100,28 @@ class SessionEngine extends ChangeNotifier {
   /// Starts a session. Pass null for an open-ended session: no end gong,
   /// just a stopwatch until [stop]. A non-zero [countdown] inserts a
   /// pre-timer countdown phase; the timer starts when it reaches zero.
-  void start(Duration? planned, {Duration countdown = Duration.zero}) {
+  ///
+  /// [intervalGongs] are times into the sit (from the timer start, not the
+  /// countdown) at which [onIntervalGong] fires with that entry's index.
+  /// Non-positive times, and for timed sessions times at or past [planned],
+  /// are ignored.
+  void start(
+    Duration? planned, {
+    Duration countdown = Duration.zero,
+    List<Duration> intervalGongs = const [],
+  }) {
     assert(_phase == SessionPhase.idle, 'session already in progress');
     assert(planned == null || planned > Duration.zero);
     _openEnded = planned == null;
     _planned = planned ?? Duration.zero;
     _countdown = countdown;
     _gongAt = null;
+    _pendingIntervals = [
+      for (var i = 0; i < intervalGongs.length; i++)
+        if (intervalGongs[i] > Duration.zero &&
+            (_openEnded || intervalGongs[i] < _planned))
+          (i, intervalGongs[i]),
+    ]..sort((a, b) => a.$2.compareTo(b.$2));
     if (countdown > Duration.zero) {
       _countdownStartedAt = clock.now();
       _startedAt = null;
@@ -127,12 +156,22 @@ class SessionEngine extends ChangeNotifier {
       _phase = SessionPhase.running;
       onCountdownDone?.call();
     }
-    if (!_openEnded &&
-        _phase == SessionPhase.running &&
-        clock.now().difference(_startedAt!) >= _planned) {
-      _gongAt = _startedAt!.add(_planned);
-      _phase = SessionPhase.overtime;
-      onGong?.call();
+    if (_phase == SessionPhase.running) {
+      final elapsed = clock.now().difference(_startedAt!);
+      if (!_openEnded && elapsed >= _planned) {
+        _gongAt = _startedAt!.add(_planned);
+        _phase = SessionPhase.overtime;
+        _pendingIntervals = const [];
+        onGong?.call();
+      } else {
+        int? due;
+        while (_pendingIntervals.isNotEmpty &&
+            elapsed >= _pendingIntervals.first.$2) {
+          due = _pendingIntervals.first.$1;
+          _pendingIntervals = _pendingIntervals.sublist(1);
+        }
+        if (due != null) onIntervalGong?.call(due);
+      }
     }
     // Notify every tick so the UI clock repaints.
     notifyListeners();
@@ -167,6 +206,7 @@ class SessionEngine extends ChangeNotifier {
     _countdown = Duration.zero;
     _gongAt = null;
     _openEnded = false;
+    _pendingIntervals = const [];
   }
 
   @override

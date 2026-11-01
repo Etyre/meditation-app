@@ -5,7 +5,9 @@ import 'package:provider/provider.dart';
 
 import '../core/metronome.dart';
 import '../core/models/app_settings.dart';
+import '../core/models/gong_config.dart';
 import '../core/models/metronome_config.dart';
+import '../core/services/audio_service.dart';
 import '../infra/storage/settings_store.dart';
 import '../infra/toggl/toggl_api_service.dart';
 import 'hr_connect_sheet.dart';
@@ -159,6 +161,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
+          const Divider(height: 32),
+          _sectionTitle('Gongs'),
+          _gongSoundRow(
+            'Start gong',
+            'Rings when the countdown reaches zero',
+            settings.gongs.startSound,
+            (v) => _update(settings.copyWith(
+                gongs: settings.gongs.copyWith(startSound: v))),
+          ),
+          _gongSoundRow(
+            'End gong',
+            'Rings when the timer completes',
+            settings.gongs.endSound,
+            (v) => _update(settings.copyWith(
+                gongs: settings.gongs.copyWith(endSound: v))),
+          ),
+          const SizedBox(height: 8),
+          Text('Interval gongs',
+              style: Theme.of(context).textTheme.titleSmall),
+          const Padding(
+            padding: EdgeInsets.only(top: 4, bottom: 4),
+            child: Text(
+                'Extra gongs part-way through the sit, at the given number '
+                'of minutes after the timer starts. Any set at or past the '
+                'timer length are skipped.'),
+          ),
+          for (var i = 0; i < settings.gongs.intervals.length; i++)
+            _intervalGongEditor(settings, i),
+          if (settings.gongs.intervals.length < GongConfig.maxIntervals)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                icon: const Icon(Icons.add),
+                label: const Text('Add interval gong'),
+                onPressed: () {
+                  final existing = settings.gongs.intervals;
+                  // Suggest 5 minutes past the last one (or 5 minutes in).
+                  final last =
+                      existing.isEmpty ? 0 : existing.last.atSeconds;
+                  _update(settings.copyWith(
+                    gongs: settings.gongs.copyWith(intervals: [
+                      ...existing,
+                      IntervalGong(
+                          atSeconds: last + 300,
+                          sound: settings.gongs.endSound),
+                    ]),
+                  ));
+                },
+              ),
+            ),
           const Divider(height: 32),
           _sectionTitle('Metronome'),
           SwitchListTile(
@@ -402,6 +454,128 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   /// Gap shown/edited in whole seconds (any integer 1–90); stored as ms.
   static int _gapSeconds(int ms) => (ms / 1000).round().clamp(1, 90);
+
+  void _previewGong(int sound) => context.read<AudioService>().playGong(sound);
+
+  Widget _gongSoundPicker(int value, ValueChanged<int> onChanged) =>
+      DropdownButton<int>(
+        isExpanded: true,
+        value: GongSounds.clampIndex(value),
+        items: [
+          for (var g = 0; g < GongSounds.names.length; g++)
+            DropdownMenuItem(value: g, child: Text(GongSounds.names[g])),
+        ],
+        onChanged: (v) {
+          if (v != null) onChanged(v);
+        },
+      );
+
+  Widget _gongSoundRow(
+    String title,
+    String subtitle,
+    int value,
+    ValueChanged<int> onChanged,
+  ) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title),
+                  Text(subtitle,
+                      style: Theme.of(context).textTheme.bodySmall),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(width: 150, child: _gongSoundPicker(value, onChanged)),
+            IconButton(
+              tooltip: 'Preview',
+              icon: const Icon(Icons.play_arrow),
+              onPressed: () => _previewGong(value),
+            ),
+          ],
+        ),
+      );
+
+  Widget _intervalGongEditor(AppSettings settings, int i) {
+    final gong = settings.gongs.intervals[i];
+    void replaceGong(IntervalGong next) {
+      final intervals = [...settings.gongs.intervals];
+      intervals[i] = next;
+      _update(settings.copyWith(
+          gongs: settings.gongs.copyWith(intervals: intervals)));
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 88,
+            child: TextFormField(
+              // Recreate the field when rows are added/removed so it always
+              // shows that row's current value.
+              key: ValueKey('gong-at-$i-${settings.gongs.intervals.length}'),
+              initialValue: _formatMinutes(gong.atSeconds),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              textAlign: TextAlign.center,
+              decoration: const InputDecoration(
+                suffixText: 'min',
+                helperText: 'e.g. 10 or 7.5',
+                isDense: true,
+              ),
+              onChanged: (v) {
+                final secs = _parseMinutes(v);
+                if (secs != null) replaceGong(gong.copyWith(atSeconds: secs));
+              },
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _gongSoundPicker(
+              gong.sound,
+              (v) => replaceGong(gong.copyWith(sound: v)),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Preview',
+            icon: const Icon(Icons.play_arrow),
+            onPressed: () => _previewGong(gong.sound),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () {
+              final intervals = [...settings.gongs.intervals]..removeAt(i);
+              _update(settings.copyWith(
+                  gongs: settings.gongs.copyWith(intervals: intervals)));
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Minutes shown with a decimal only when needed (450 s → "7.5").
+  static String _formatMinutes(int seconds) {
+    if (seconds % 60 == 0) return '${seconds ~/ 60}';
+    final m = seconds / 60;
+    return m.toStringAsFixed(m * 10 == (m * 10).roundToDouble() ? 1 : 2);
+  }
+
+  /// Accepts "10", "7.5", "0.25"; returns whole seconds, or null if the text
+  /// isn't a time between 1 second and 3 hours.
+  static int? _parseMinutes(String text) {
+    final minutes = double.tryParse(text.trim().replaceAll(',', '.'));
+    if (minutes == null) return null;
+    final secs = (minutes * 60).round();
+    if (secs < 1 || secs > 180 * 60) return null;
+    return secs;
+  }
 
   Widget _sectionTitle(String text) => Padding(
         padding: const EdgeInsets.only(bottom: 8),

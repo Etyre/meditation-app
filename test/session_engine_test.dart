@@ -200,5 +200,129 @@ void main() {
         engine.stop();
       });
     });
+
+    test('interval gongs fire at their times with their original indices, '
+        'and not at or past the timer length', () {
+      fakeAsync((async) {
+        final clock = FakeClock();
+        final fired = <int>[];
+        var endGongs = 0;
+        final engine = SessionEngine(
+          clock: clock,
+          onGong: () => endGongs++,
+          onIntervalGong: fired.add,
+        );
+        // Given out of order; index 2 is at the timer length so it's
+        // swallowed by the end gong; index 3 is past it; index 4 is zero.
+        engine.start(const Duration(minutes: 20), intervalGongs: const [
+          Duration(minutes: 10),
+          Duration(minutes: 5),
+          Duration(minutes: 20),
+          Duration(minutes: 25),
+          Duration.zero,
+        ]);
+
+        clock.advance(const Duration(minutes: 4, seconds: 59));
+        async.elapse(const Duration(minutes: 4, seconds: 59));
+        expect(fired, isEmpty);
+
+        clock.advance(const Duration(seconds: 1));
+        async.elapse(const Duration(seconds: 1));
+        expect(fired, [1]);
+
+        clock.advance(const Duration(minutes: 5));
+        async.elapse(const Duration(minutes: 5));
+        expect(fired, [1, 0]);
+
+        clock.advance(const Duration(minutes: 10));
+        async.elapse(const Duration(minutes: 10));
+        expect(endGongs, 1);
+        clock.advance(const Duration(minutes: 6));
+        async.elapse(const Duration(minutes: 6));
+        expect(fired, [1, 0]); // nothing more in overtime
+        engine.stop();
+      });
+    });
+
+    test('interval gongs are measured from the timer start, after the '
+        'countdown', () {
+      fakeAsync((async) {
+        final clock = FakeClock();
+        final fired = <int>[];
+        final engine = SessionEngine(clock: clock, onIntervalGong: fired.add);
+        engine.start(const Duration(minutes: 10),
+            countdown: const Duration(seconds: 30),
+            intervalGongs: const [Duration(minutes: 1)]);
+
+        clock.advance(const Duration(minutes: 1));
+        async.elapse(const Duration(minutes: 1));
+        expect(engine.phase, SessionPhase.running);
+        expect(fired, isEmpty); // only 30 s into the sit
+
+        clock.advance(const Duration(seconds: 30));
+        async.elapse(const Duration(seconds: 30));
+        expect(fired, [0]);
+        engine.stop();
+      });
+    });
+
+    test('open-ended sessions ring every interval gong', () {
+      fakeAsync((async) {
+        final clock = FakeClock();
+        final fired = <int>[];
+        final engine = SessionEngine(clock: clock, onIntervalGong: fired.add);
+        engine.start(null, intervalGongs: const [
+          Duration(minutes: 10),
+          Duration(minutes: 30),
+        ]);
+        clock.advance(const Duration(minutes: 11));
+        async.elapse(const Duration(minutes: 11));
+        expect(fired, [0]);
+        clock.advance(const Duration(minutes: 20));
+        async.elapse(const Duration(minutes: 20));
+        expect(fired, [0, 1]);
+        engine.stop();
+      });
+    });
+
+    test('several interval gongs due on one tick ring only the latest', () {
+      fakeAsync((async) {
+        final clock = FakeClock();
+        final fired = <int>[];
+        final engine = SessionEngine(clock: clock, onIntervalGong: fired.add);
+        engine.start(const Duration(minutes: 30), intervalGongs: const [
+          Duration(minutes: 5),
+          Duration(minutes: 10),
+          Duration(minutes: 15),
+        ]);
+        // The app was suspended: the clock jumps 12 minutes in one tick.
+        clock.advance(const Duration(minutes: 12));
+        engine.tick();
+        expect(fired, [1]);
+        clock.advance(const Duration(minutes: 3));
+        engine.tick();
+        expect(fired, [1, 2]);
+        engine.stop();
+      });
+    });
+
+    test('interval gongs are cleared between sessions', () {
+      fakeAsync((async) {
+        final clock = FakeClock();
+        final fired = <int>[];
+        final engine = SessionEngine(clock: clock, onIntervalGong: fired.add);
+        engine.start(const Duration(minutes: 10),
+            intervalGongs: const [Duration(minutes: 5)]);
+        clock.advance(const Duration(minutes: 1));
+        async.elapse(const Duration(minutes: 1));
+        engine.stop();
+
+        engine.start(const Duration(minutes: 10));
+        clock.advance(const Duration(minutes: 6));
+        async.elapse(const Duration(minutes: 6));
+        expect(fired, isEmpty);
+        engine.stop();
+      });
+    });
   });
 }

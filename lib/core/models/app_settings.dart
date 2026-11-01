@@ -1,3 +1,4 @@
+import 'gong_config.dart';
 import 'metronome_config.dart';
 import 'question.dart';
 
@@ -9,6 +10,9 @@ class AppSettings {
   /// heart rate is sampled as the pre-meditation baseline; at zero the gong
   /// rings and the timer starts.
   final int countdownSeconds;
+
+  /// Which sounds the start/end gongs use, plus any extra gongs during the sit.
+  final GongConfig gongs;
   final MetronomeConfig metronome;
 
   /// Google Apps Script "web app" URL that appends a row to the sheet.
@@ -43,6 +47,7 @@ class AppSettings {
   const AppSettings({
     this.defaultTimerMinutes = 20,
     this.countdownSeconds = 0,
+    this.gongs = GongConfig.defaults,
     this.metronome = MetronomeConfig.defaults,
     this.sheetsWebhookUrl = '',
     this.sheetsSecret = '',
@@ -73,6 +78,7 @@ class AppSettings {
   AppSettings copyWith({
     int? defaultTimerMinutes,
     int? countdownSeconds,
+    GongConfig? gongs,
     MetronomeConfig? metronome,
     String? sheetsWebhookUrl,
     String? sheetsSecret,
@@ -88,6 +94,7 @@ class AppSettings {
       AppSettings(
         defaultTimerMinutes: defaultTimerMinutes ?? this.defaultTimerMinutes,
         countdownSeconds: countdownSeconds ?? this.countdownSeconds,
+        gongs: gongs ?? this.gongs,
         metronome: metronome ?? this.metronome,
         sheetsWebhookUrl: sheetsWebhookUrl ?? this.sheetsWebhookUrl,
         sheetsSecret: sheetsSecret ?? this.sheetsSecret,
@@ -104,6 +111,7 @@ class AppSettings {
   Map<String, dynamic> toJson() => {
         'defaultTimerMinutes': defaultTimerMinutes,
         'countdownSeconds': countdownSeconds,
+        'gongs': gongs.toJson(),
         'metronome': metronome.toJson(),
         'sheetsWebhookUrl': sheetsWebhookUrl,
         'sheetsSecret': sheetsSecret,
@@ -122,6 +130,8 @@ class AppSettings {
     return AppSettings(
       defaultTimerMinutes: (json['defaultTimerMinutes'] as num?)?.toInt() ?? 20,
       countdownSeconds: (json['countdownSeconds'] as num?)?.toInt() ?? 0,
+      gongs: GongConfig.fromJson(
+          (json['gongs'] as Map?)?.cast<String, dynamic>()),
       metronome: MetronomeConfig.fromJson(
           (json['metronome'] as Map?)?.cast<String, dynamic>()),
       sheetsWebhookUrl: json['sheetsWebhookUrl'] as String? ?? '',

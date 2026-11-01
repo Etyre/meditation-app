@@ -7,12 +7,16 @@ import 'package:meditation_timer/core/services/audio_service.dart';
 class RecordingAudio implements AudioService {
   final List<int> played = [];
   @override
-  Future<void> playGong() async {}
+  Future<void> playGong(int sound) async {}
   @override
   Future<void> playTone(int toneIndex) async {
     played.add(toneIndex);
   }
 
+  @override
+  Future<void> startKeepAlive() async {}
+  @override
+  Future<void> stopKeepAlive() async {}
   @override
   Future<void> dispose() async {}
 }

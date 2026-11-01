@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'controllers/session_controller.dart';
 import 'core/hrv/hr_recorder.dart';
 import 'core/metronome.dart';
+import 'core/services/audio_service.dart';
 import 'core/services/clock.dart';
 import 'core/services/heart_rate_service.dart';
 import 'core/session_engine.dart';
@@ -58,6 +59,7 @@ Future<void> main() async {
   );
   engine.onGong = controller.handleGong;
   engine.onCountdownDone = controller.handleCountdownDone;
+  engine.onIntervalGong = controller.handleIntervalGong;
 
   // Push any sessions recorded offline in earlier runs.
   history.syncPending();
@@ -67,6 +69,7 @@ Future<void> main() async {
     controller: controller,
     heartRate: heartRate,
     metronome: metronome,
+    audio: audio,
     toggl: toggl,
     history: history,
   ));
@@ -77,6 +80,7 @@ class MeditationApp extends StatefulWidget {
   final SessionController controller;
   final HeartRateService heartRate;
   final Metronome metronome;
+  final AudioService audio;
   final TogglApiService toggl;
   final SessionHistoryStore history;
 
@@ -86,6 +90,7 @@ class MeditationApp extends StatefulWidget {
     required this.controller,
     required this.heartRate,
     required this.metronome,
+    required this.audio,
     required this.toggl,
     required this.history,
   });
@@ -124,6 +129,7 @@ class _MeditationAppState extends State<MeditationApp>
         ChangeNotifierProvider.value(value: widget.controller),
         Provider<HeartRateService>.value(value: widget.heartRate),
         Provider<Metronome>.value(value: widget.metronome),
+        Provider<AudioService>.value(value: widget.audio),
         Provider<TogglApiService>.value(value: widget.toggl),
         ChangeNotifierProvider.value(value: widget.history),
       ],

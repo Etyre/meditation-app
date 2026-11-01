@@ -6,7 +6,13 @@ with Flutter.
 ## What it does
 
 - **Timer with gong** — set a length, press Begin; a synthesized gong sounds
-  when time is up.
+  when time is up. Settings → Gongs picks the sound for the start and end
+  gongs from six options (gong, deep gong, shimmering gong, singing bowl,
+  bell, chime), each with a preview button.
+- **Interval gongs** — optionally add any number of extra gongs during the
+  sit (Settings → Gongs → Add interval gong), each at a chosen number of
+  minutes after the timer starts and with its own sound. Ones set at or past
+  the timer length are skipped; in open-ended sessions they all ring.
 - **Overtime stopwatch** — after the gong, a stopwatch counts up until you
   press Stop. You then choose whether to add that overtime to the timed
   amount.
@@ -113,13 +119,16 @@ connected when you press Begin, the session records HR/HRV automatically.
 
 ## Notes
 
-- Keep the phone unlocked during a session (the app holds a wakelock and
-  dims nothing itself). iOS suspends timers of backgrounded apps, so the
-  gong may be delayed if you lock the screen; the elapsed-time math stays
-  correct because it's computed from wall-clock time, not tick counting.
-- Audio assets in `assets/audio/` are synthesized (script preserved in
-  `tool/gen_sounds.py`); regenerate or replace them with your own recordings
-  freely — same filenames.
+- The app holds a wakelock so the screen stays on by default. You can lock
+  the phone during a session: a near-silent audio loop plays from Begin to
+  Stop, which (together with the `audio` background mode in
+  `ios/Runner/Info.plist`) keeps iOS from suspending the app, so gongs ring
+  on time with the screen off. Elapsed-time math is computed from wall-clock
+  time, not tick counting, so it stays correct even if the app is suspended.
+- Audio assets in `assets/audio/` are synthesized by `tool/gen_sounds.py`
+  (run it to regenerate; pass filenames to redo only some). Replace them
+  with your own recordings freely — same filenames. The gong bank order is
+  listed at the top of that script and in `lib/core/models/gong_config.dart`.
 
 ## Repository history note
 

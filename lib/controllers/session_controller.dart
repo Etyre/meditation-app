@@ -4,6 +4,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../core/hrv/hr_recorder.dart';
 import '../core/hrv/hrv_analysis.dart';
 import '../core/metronome.dart';
+import '../core/models/gong_config.dart';
 import '../core/models/session.dart';
 import '../core/models/session_record.dart';
 import '../core/services/audio_service.dart';
@@ -66,14 +67,26 @@ class SessionController extends ChangeNotifier {
   int? _lastFirst20sHr;
   int? get lastFirst20sHr => _lastFirst20sHr;
 
+  /// Gong settings snapshotted at session start, so edits made mid-session
+  /// don't shift which sound an already-scheduled gong uses.
+  GongConfig _gongs = GongConfig.defaults;
+
   /// Pass null for an open-ended session (stopwatch only, no gong).
   /// A configured countdown delays the timer: heart rate sampled during it
   /// becomes the pre-meditation baseline, and metronome + session recording
   /// begin at the start gong.
   void startSession(Duration? planned) {
-    final countdown =
-        Duration(seconds: settingsStore.settings.countdownSeconds);
-    engine.start(planned, countdown: countdown);
+    final settings = settingsStore.settings;
+    _gongs = settings.gongs;
+    final countdown = Duration(seconds: settings.countdownSeconds);
+    engine.start(
+      planned,
+      countdown: countdown,
+      intervalGongs: [for (final g in _gongs.intervals) g.at],
+    );
+    // Keeps the app (and its timers) alive if the screen is locked, so the
+    // gongs ring on time instead of when the phone is next unlocked.
+    audio.startKeepAlive();
     if (countdown > Duration.zero) {
       if (heartRate.currentState == HrConnectionState.connected) {
         recorder.startBaseline(heartRate.samples);
@@ -88,7 +101,7 @@ class SessionController extends ChangeNotifier {
   /// Called by the engine's onCountdownDone hook (wired in main.dart):
   /// countdown hit zero, so ring the start gong and begin the sit proper.
   void handleCountdownDone() {
-    audio.playGong();
+    audio.playGong(_gongs.startSound);
     _beginMeditation();
   }
 
@@ -107,6 +120,7 @@ class SessionController extends ChangeNotifier {
   /// Abandons the session during the countdown: nothing is logged.
   void cancelSession() {
     engine.cancel();
+    audio.stopKeepAlive();
     recorder.discardBaseline();
     WakelockPlus.disable();
     notifyListeners();
@@ -114,7 +128,14 @@ class SessionController extends ChangeNotifier {
 
   /// Called by the engine's onGong hook (wired in main.dart).
   void handleGong() {
-    audio.playGong();
+    audio.playGong(_gongs.endSound);
+  }
+
+  /// Called by the engine's onIntervalGong hook (wired in main.dart) with
+  /// the index of the interval gong that came due.
+  void handleIntervalGong(int index) {
+    if (index < 0 || index >= _gongs.intervals.length) return;
+    audio.playGong(_gongs.intervals[index].sound);
   }
 
   /// Ends the session and stashes the outcome + HR data for the
@@ -122,6 +143,7 @@ class SessionController extends ChangeNotifier {
   SessionOutcome stopSession() {
     final outcome = engine.stop();
     metronome.stop();
+    audio.stopKeepAlive();
     recorder.stopCollecting();
     WakelockPlus.disable();
     _lastOutcome = outcome;
