@@ -1,9 +1,12 @@
 # Meditation Timer
 
 A meditation timer for iPhone (and, with one build command, Android) built
-with Flutter.
+with Flutter, started 10 August 2026. It was built so one tap starts a sit
+with a real gong at the end, and so every session (length, overtime, answers
+to a few post-sit questions, heart-rate/HRV from a chest strap) lands in a
+Google Sheet and Toggl without any typing afterwards.
 
-## What it does
+## How it works
 
 - **Timer with gong** — set a length, press Begin; a synthesized gong sounds
   when time is up. Settings → Gongs picks the sound for the start and end
@@ -18,6 +21,7 @@ with Flutter.
   amount.
 - **Early abort** — pressing Stop before the gong records the time actually
   sat (shorter than the timer length) and marks the session aborted.
+- **Open-ended sessions** — no timer, just a stopwatch you end yourself.
 - **Post-session questions** — configurable questions after each session
   (Settings → Post-session questions → Edit questions). Each question is
   either free answer or multiple choice (optionally with an "Other…" choice
@@ -30,17 +34,38 @@ with Flutter.
   20 seconds of the sit).
 - **Google Sheets logging** — start/stop time, planned timer length,
   meditated minutes, overtime, abort flag, your answers, and heart data are
-  appended as a row to your sheet.
+  appended as a row to your sheet. Rows are appended with headers created
+  automatically, including one column per question. Failed uploads (no
+  network) are queued on the phone and retried on the next launch/session.
+- **Local history** — every session is saved on the phone first
+  (offline-first); the History screen lists them and shows what is still
+  pending upload.
 - **Heart rate / HRV (optional)** — connect a BLE strap (Polar H10 etc.).
   If connected when a session starts, the app records heart rate and the raw
   RR (beat-to-beat) intervals, and computes RMSSD, SDNN, ln(RMSSD) and an
   Elite-HRV-style 0-100 score. Raw RR data goes to the sheet too.
 - **Toggl** — the session block (start → stop wall-clock time) is logged as
-  a Toggl Track time entry tagged `meditation`.
+  a Toggl Track time entry tagged `meditation`, filed under the chosen
+  default project.
 - **Metronome** — optional repeating pattern of up to 4 tones with a
   configurable gap after each, playing throughout the session.
+- **Lock-screen keep-alive** — the app holds a wakelock so the screen stays
+  on by default. You can lock the phone during a session: a near-silent
+  audio loop plays from Begin to Stop, which (together with the `audio`
+  background mode in `ios/Runner/Info.plist`) keeps iOS from suspending the
+  app, so gongs ring on time with the screen off. Elapsed-time math is
+  computed from wall-clock time, not tick counting, so it stays correct even
+  if the app is suspended.
+- **Drafts are never lost** — every text field saves on each keystroke.
+  Settings fields (sheet URL, secret, Toggl token and description, countdown,
+  metronome gaps, interval gong times) write straight into the persisted
+  settings. The post-session questionnaire and the question editor save to
+  SharedPreferences under `draft.questionnaire.<session start>` and
+  `draft.questionEditor.<question|new>` (`lib/infra/storage/drafts.dart`) and
+  restore before first paint; they clear only on Save / "Save & log" or
+  "Discard session".
 
-## Project layout
+### Code layout
 
 The code is split so an Android release is just a build, and even a
 non-Flutter port would only replace the thin outer layers:
@@ -50,14 +75,64 @@ non-Flutter port would only replace the thin outer layers:
   packet parser, models, and service interfaces.
 - `lib/infra/` — implementations of those interfaces: audioplayers audio,
   flutter_blue_plus BLE, Google Sheets webhook, Toggl v9 API, settings
-  storage.
+  storage, drafts.
 - `lib/controllers/` — `SessionController` wires the engine to audio,
   metronome, HR recording, and logging.
 - `lib/ui/` — the screens (home, session, questionnaire, settings,
-  question editor).
+  question editor, history).
 - `test/` — unit tests for all the core logic.
 
-## Building
+## Files
+
+| File | Purpose |
+| --- | --- |
+| `lib/main.dart` | Entry point; builds every service and wires providers. Header comment describes where config/state live |
+| `lib/core/session_engine.dart` | Session state machine: countdown, timer, gongs, overtime, abort |
+| `lib/core/metronome.dart` | Metronome scheduler |
+| `lib/core/hrv/hr_recorder.dart`, `hrv_analysis.dart` | HR/RR recording and RMSSD/SDNN/score math |
+| `lib/core/ble/heart_rate_parser.dart` | BLE Heart Rate Measurement packet parser |
+| `lib/core/models/` | `AppSettings`, `GongConfig`, `MetronomeConfig`, `Question`, `SessionOutcome`, `SessionRecord`, heart-rate types |
+| `lib/core/services/` | Interfaces: audio, clock, heart rate, session log, sheets logger, Toggl |
+| `lib/infra/audio/player_audio_service.dart` | audioplayers implementation; gong bank asset list; keep-alive loop |
+| `lib/infra/ble/flutter_blue_hr_service.dart` | flutter_blue_plus heart-rate strap connection |
+| `lib/infra/sheets/webhook_sheets_logger.dart` | POSTs rows to the Apps Script web app with the shared secret |
+| `lib/infra/toggl/toggl_api_service.dart` | Toggl Track v9 API: workspace discovery, projects, time entries |
+| `lib/infra/storage/settings_store.dart` | Loads/saves `AppSettings` as one JSON string in SharedPreferences |
+| `lib/infra/storage/session_history_store.dart` | Local session history + pending-upload queue and retry |
+| `lib/infra/storage/drafts.dart` | Save-as-you-type storage for the questionnaire and question editor |
+| `lib/controllers/session_controller.dart` | Glue between engine, audio, metronome, HR recorder, history |
+| `lib/ui/home_screen.dart` | Length picker, Begin, HR chip, links to History and Settings |
+| `lib/ui/session_screen.dart` | Running timer / stopwatch, Stop |
+| `lib/ui/questionnaire_screen.dart` | Post-session summary, overtime choice, questions, Save & log |
+| `lib/ui/settings_screen.dart` | Timer, gongs, metronome, Sheets, Toggl, HR strap, questions |
+| `lib/ui/questions_screen.dart` | Question list (reorder/delete) and the question editor |
+| `lib/ui/history_screen.dart`, `hr_connect_sheet.dart`, `format.dart` | History list, BLE picker sheet, formatting helpers |
+| `assets/audio/*.wav` | Synthesized gong bank, metronome tones, tick, near-silent keep-alive loop |
+| `docs/apps_script.gs` | The Google Sheet side: appends rows, checks `SECRET`, splits oversized cells |
+| `tool/gen_sounds.py` | Regenerates `assets/audio/` (stdlib only, about a minute) |
+| `tool/phone.sh` | backup / restore / deploy / status against the connected iPhone via `devicectl` |
+| `tool/.device` | (untracked) the iPhone UDID for `phone.sh` |
+| `test/*.dart` | Unit tests: engine, metronome, HRV, BLE parser, gong config, questions, history store, sheets logger, drafts |
+
+## Runtime locations
+
+- **Config and state (phone)**: all app state (settings incl. Sheets URL /
+  Toggl token / questions / metronome / HR strap, the local session history +
+  pending uploads, and `draft.*` text drafts) is one SharedPreferences plist
+  in the app's data container on the device. Nothing is stored on the Mac.
+- **Backups (Mac)**: `~/Library/Application Support/meditation-app-backups/<timestamp>/`
+  written by `tool/phone.sh backup`. They contain the Toggl token, so they
+  live outside the repo.
+- **Build output**: `build/` is a symlink to `~/Library/Caches/meditation-app-build`
+  (outside iCloud; see Gotchas).
+- **Secrets**: none in the repo. The Sheets URL + secret and the Toggl token
+  are entered in the app's Settings. `tool/.device` (UDID) is gitignored.
+- **Logs**: none; failures surface as snackbars and are retried.
+- **Generated**: `ios/Flutter/ephemeral/flutter_native_integration.env` and
+  `.dart_tool/package_config.json` are rebuilt by every `flutter` command and
+  gitignored.
+
+## Common tasks
 
 Prereqs (macOS): [Flutter](https://docs.flutter.dev/get-started/install)
 (`brew install --cask flutter`), and for iOS: full Xcode from the App Store
@@ -65,7 +140,8 @@ plus CocoaPods (`brew install cocoapods`).
 
 ```sh
 flutter pub get
-flutter test          # runs without Xcode
+flutter analyze
+flutter test          # runs without Xcode; the end-to-end proof for the core logic
 flutter run           # to a connected iPhone / simulator
 flutter build apk     # the Android version
 ```
@@ -74,21 +150,36 @@ First iOS device build: open `ios/Runner.xcworkspace` in Xcode once to set
 your signing team (Runner target → Signing & Capabilities), then
 `flutter run`.
 
-To update an already-installed phone build without losing its on-device
-data (settings, local history), use `tool/phone.sh deploy` — it snapshots
-the app's data, builds, and installs in place via `devicectl`. Do **not**
-use `flutter install`, which uninstalls first and wipes the data.
-`tool/phone.sh backup` / `restore` copy the app's data off/onto the phone
-(everything is one SharedPreferences plist); backups land in
-`~/Library/Application Support/meditation-app-backups/`.
+Update the phone without losing its data:
 
-If the project lives in an iCloud-synced folder (e.g. `~/Documents`),
-codesign may reject the Flutter framework ("detritus not allowed"). Point
-`build/` outside iCloud: `rm -rf build && ln -s ~/Library/Caches/<name> build`.
+```sh
+echo <UDID> > tool/.device          # once; or export MEDITATION_DEVICE_ID
+tool/phone.sh status                # installed? has data?
+tool/phone.sh backup                # snapshot settings + history off the phone
+tool/phone.sh deploy                # backup → build release → install IN PLACE → verify
+tool/phone.sh restore [dir]         # push a snapshot back (default: latest)
+```
 
-## Integration setup
+`deploy` snapshots the app's data, builds, and installs in place via
+`devicectl`. Do **not** use `flutter install`, which uninstalls first and
+wipes the data. `backup` / `restore` copy the app's data off/onto the phone
+(everything is one SharedPreferences plist).
 
-### Google Sheets (~2 min)
+Regenerate the audio assets (pass filenames to redo only some):
+
+```sh
+python3 tool/gen_sounds.py
+```
+
+Point `build/` outside iCloud if the symlink is lost:
+
+```sh
+rm -rf build && ln -s ~/Library/Caches/meditation-app-build build
+```
+
+### Integration setup
+
+**Google Sheets (~2 min)**
 
 1. Create a Google Sheet.
 2. Extensions → Apps Script → paste `docs/apps_script.gs`.
@@ -100,35 +191,50 @@ codesign may reject the Flutter framework ("detritus not allowed"). Point
 5. Copy the `/exec` URL and the same secret into the app: Settings →
    Google Sheets.
 
-Rows are appended with headers created automatically, including one column
-per question. Failed uploads (no network) are queued on the phone and
-retried on the next launch/session.
-
-### Toggl
+**Toggl**
 
 Settings → Toggl → paste your API token from
 [track.toggl.com/profile](https://track.toggl.com/profile). The default
 workspace is discovered automatically; the entry description is
-configurable (default "Meditation").
+configurable (default "Meditation"), and a default project can be picked.
 
-### Heart rate strap
+**Heart rate strap**
 
 Wear the strap (most only advertise while worn), then Settings → Heart rate
 monitor (or the chip on the home screen) → pick the device. If it's
 connected when you press Begin, the session records HR/HRV automatically.
 
-## Notes
+## Settings that matter
 
-- The app holds a wakelock so the screen stays on by default. You can lock
-  the phone during a session: a near-silent audio loop plays from Begin to
-  Stop, which (together with the `audio` background mode in
-  `ios/Runner/Info.plist`) keeps iOS from suspending the app, so gongs ring
-  on time with the screen off. Elapsed-time math is computed from wall-clock
-  time, not tick counting, so it stays correct even if the app is suspended.
-- Audio assets in `assets/audio/` are synthesized by `tool/gen_sounds.py`
-  (run it to regenerate; pass filenames to redo only some). Replace them
-  with your own recordings freely — same filenames. The gong bank order is
-  listed at the top of that script and in `lib/core/models/gong_config.dart`.
+- `ios/Runner/Info.plist` has the `audio` background mode; without it iOS
+  suspends the app when the phone is locked and gongs ring late.
+- Xcode: signing team on the Runner target (development certificate; this
+  is also what lets `tool/phone.sh` read and write the app's data container).
+- Apps Script deployment: execute as **Me**, access **Anyone**, with the
+  `SECRET` script property set.
+- Bluetooth permission is requested on first strap connection.
+
+## Gotchas learned
+
+- `flutter install` / `flutter run` after an uninstall delete the app first,
+  wiping settings and history and dropping the icon at the end of the last
+  home-screen page. Always update with `tool/phone.sh deploy`.
+- If the project lives in an iCloud-synced folder (e.g. `~/Documents`),
+  codesign may reject the Flutter framework ("detritus not allowed"). Point
+  `build/` outside iCloud: `rm -rf build && ln -s ~/Library/Caches/<name> build`.
+- Google Sheets cells have a size limit; `docs/apps_script.gs` splits
+  oversized values (raw RR data) across continuation columns.
+- Audio assets in `assets/audio/` are synthesized by `tool/gen_sounds.py`.
+  Replace them with your own recordings freely — same filenames. The gong
+  bank order is listed at the top of that script and in
+  `lib/core/models/gong_config.dart`; keep the two in sync.
+- Numeric settings fields (countdown, metronome gap, interval gong time)
+  only persist when the typed value is in range, so a half-typed number is
+  not written; the previous value stays.
+- `Drafts.init()` must be awaited in `main()` before `runApp`; reads are
+  synchronous and silently return nothing before it.
+- `.git-rewrite/` is an empty leftover from the 2026-09-02 `filter-branch`
+  run (below); it is untracked and safe to delete.
 
 ## Repository history note
 

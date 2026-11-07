@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../controllers/session_controller.dart';
 import '../core/models/question.dart';
+import '../infra/storage/drafts.dart';
 import '../infra/storage/settings_store.dart';
 import 'format.dart';
 
@@ -26,13 +27,40 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   bool _includeOvertime = true;
   bool _saving = false;
 
+  /// Answers are saved as they are typed, keyed by the session's start time
+  /// and the question text, so a rebuilt screen shows the same answers.
+  /// Cleared on "Save & log" and on "Discard session".
+  late final String _draftKey;
+
   @override
   void initState() {
     super.initState();
     _questions = context.read<SettingsStore>().settings.questions;
-    _answerControllers =
-        [for (final _ in _questions) TextEditingController()];
+    final started = context.read<SessionController>().lastOutcome?.startedAt;
+    _draftKey = 'questionnaire.${started?.toIso8601String() ?? 'none'}';
+    final draft = Drafts.readJson(_draftKey);
+    final answers = (draft?['answers'] as Map?) ?? const {};
+    final choices = (draft?['choices'] as Map?) ?? const {};
+    _answerControllers = [
+      for (final q in _questions)
+        TextEditingController(text: answers[q.text] as String? ?? ''),
+    ];
+    for (var i = 0; i < _questions.length; i++) {
+      final c = choices[_questions[i].text];
+      if (c is String) _choices[i] = c;
+      _answerControllers[i].addListener(_saveDraft);
+    }
   }
+
+  void _saveDraft() => Drafts.writeJson(_draftKey, {
+        'answers': {
+          for (var i = 0; i < _questions.length; i++)
+            _questions[i].text: _answerControllers[i].text,
+        },
+        'choices': {
+          for (final e in _choices.entries) _questions[e.key].text: e.value,
+        },
+      });
 
   String _answerFor(int i) {
     final q = _questions[i];
@@ -63,6 +91,7 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
       },
       includeOvertime: _includeOvertime,
     );
+    Drafts.clear(_draftKey);
     if (!mounted) return;
     final messages = <String>[
       'Saved on device',
@@ -182,7 +211,10 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
             TextButton(
               onPressed: _saving
                   ? null
-                  : () => Navigator.of(context).popUntil((r) => r.isFirst),
+                  : () {
+                      Drafts.clear(_draftKey);
+                      Navigator.of(context).popUntil((r) => r.isFirst);
+                    },
               child: const Text('Discard session'),
             ),
           ],
@@ -222,6 +254,7 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
                   } else {
                     _choices.remove(i);
                   }
+                  _saveDraft();
                 }),
               ),
             if (q.allowOther)
@@ -234,6 +267,7 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
                   } else {
                     _choices.remove(i);
                   }
+                  _saveDraft();
                 }),
               ),
           ],

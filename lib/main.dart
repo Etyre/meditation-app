@@ -1,3 +1,15 @@
+// Meditation Timer: a Flutter app (iPhone, buildable for Android) with a gong
+// timer, overtime stopwatch, interval gongs, metronome, BLE heart-rate/HRV
+// recording, post-session questions, and logging to a Google Sheet (Apps
+// Script webhook) and Toggl Track.
+//
+// Config and state: everything (settings incl. the Sheets URL + secret, Toggl
+// token, questions, metronome, remembered HR strap; local session history and
+// pending uploads; text-field drafts under "draft.*") is one SharedPreferences
+// store in the app's data container on the device. Nothing lives on the Mac
+// except optional backups in ~/Library/Application Support/meditation-app-backups/
+// made by tool/phone.sh. Logs: none; failures surface as snackbars and are
+// retried on the next launch/foreground.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -11,6 +23,7 @@ import 'core/session_engine.dart';
 import 'infra/audio/player_audio_service.dart';
 import 'infra/ble/flutter_blue_hr_service.dart';
 import 'infra/sheets/webhook_sheets_logger.dart';
+import 'infra/storage/drafts.dart';
 import 'infra/storage/session_history_store.dart';
 import 'infra/storage/settings_store.dart';
 import 'infra/toggl/toggl_api_service.dart';
@@ -22,6 +35,7 @@ Future<void> main() async {
   const clock = SystemClock();
   final settingsStore = SettingsStore();
   await settingsStore.load();
+  await Drafts.init();
 
   final audio = PlayerAudioService();
   await audio.init();

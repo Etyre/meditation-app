@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/models/question.dart';
+import '../infra/storage/drafts.dart';
 import '../infra/storage/settings_store.dart';
 
 /// Editor for the post-session questions: reorder by dragging, tap to edit
@@ -133,16 +134,32 @@ class _QuestionEditorState extends State<_QuestionEditor> {
   late bool _allowOther;
   String? _error;
 
+  /// Text typed here is saved as it is typed, keyed by the question being
+  /// edited (or "new"), and comes back if the editor is left before Save.
+  String get _draftKey => 'questionEditor.${widget.initial?.text ?? 'new'}';
+
   @override
   void initState() {
     super.initState();
     final q = widget.initial;
-    _text = TextEditingController(text: q?.text ?? '');
+    final draft = Drafts.readJson(_draftKey);
+    _text = TextEditingController(text: draft?['text'] as String? ?? q?.text ?? '');
     _type = q?.type ?? QuestionType.freeText;
     _allowOther = q?.allowOther ?? false;
-    final opts = (q?.options.isNotEmpty ?? false) ? q!.options : ['', ''];
-    _options = [for (final o in opts) TextEditingController(text: o)];
+    final draftOpts = (draft?['options'] as List?)?.whereType<String>().toList();
+    final opts = draftOpts ??
+        ((q?.options.isNotEmpty ?? false) ? q!.options : ['', '']);
+    _options = [for (final o in opts) _optionController(o)];
+    _text.addListener(_saveDraft);
   }
+
+  TextEditingController _optionController([String text = '']) =>
+      TextEditingController(text: text)..addListener(_saveDraft);
+
+  void _saveDraft() => Drafts.writeJson(_draftKey, {
+        'text': _text.text,
+        'options': [for (final c in _options) c.text],
+      });
 
   @override
   void dispose() {
@@ -178,6 +195,7 @@ class _QuestionEditorState extends State<_QuestionEditor> {
         return;
       }
     }
+    Drafts.clear(_draftKey);
     Navigator.pop(
       context,
       Question(
@@ -263,6 +281,7 @@ class _QuestionEditorState extends State<_QuestionEditor> {
                       onPressed: _options.length > 2
                           ? () => setState(() {
                                 _options.removeAt(i).dispose();
+                                _saveDraft();
                               })
                           : null,
                     ),
@@ -274,8 +293,10 @@ class _QuestionEditorState extends State<_QuestionEditor> {
               child: TextButton.icon(
                 icon: const Icon(Icons.add),
                 label: const Text('Add choice'),
-                onPressed: () =>
-                    setState(() => _options.add(TextEditingController())),
+                onPressed: () => setState(() {
+                  _options.add(_optionController());
+                  _saveDraft();
+                }),
               ),
             ),
             SwitchListTile(
