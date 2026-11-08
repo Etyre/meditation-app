@@ -147,6 +147,7 @@ non-Flutter port would only replace the thin outer layers:
 | `tool/gen_sounds.py` | Regenerates `assets/audio/` (stdlib only, about a minute) |
 | `tool/gen_icon.swift` | Draws the app icon (partially opened lotus) into the iOS asset catalog and Android mipmaps |
 | `tool/phone.sh` | backup / restore / deploy / status against the connected iPhone via `devicectl` |
+| `ios-deploy.conf` | Opts this app in to [ios-auto-deploy](../ios-auto-deploy/README.md): every commit is built and installed on the phone over Wi-Fi |
 | `tool/.device` | (untracked) the iPhone UDID for `phone.sh` |
 | `test/*.dart` | Unit tests: engine (incl. segments), metronome, HRV, BLE parser, gong config, protocols/plans/settings, questions, history store, sheets logger, drafts |
 
@@ -187,7 +188,10 @@ First iOS device build: open `ios/Runner.xcworkspace` in Xcode once to set
 your signing team (Runner target → Signing & Capabilities), then
 `flutter run`.
 
-Update the phone without losing its data:
+**Normally nothing to do:** [ios-auto-deploy](../ios-auto-deploy/README.md) notices each new commit on `main`
+and installs it on the phone over Wi-Fi within a few minutes (it waits while
+the app is running, so a sit is never interrupted). `python3 ../ios-auto-deploy/watch.py status`
+shows what the phone has. For a manual push with a data backup first:
 
 ```sh
 echo <UDID> > tool/.device          # once; or export MEDITATION_DEVICE_ID
