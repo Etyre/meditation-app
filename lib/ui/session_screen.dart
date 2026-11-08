@@ -18,6 +18,9 @@ class SessionScreen extends StatelessWidget {
     final inCountdown = engine.phase == SessionPhase.countdown;
     final inOvertime = engine.phase == SessionPhase.overtime;
     final openEnded = engine.openEnded;
+    final structured = engine.segments.isNotEmpty;
+    final practice = controller.currentPractice;
+    final next = controller.nextPractice;
 
     return PopScope(
       canPop: false, // the only way out is the stop button
@@ -28,6 +31,19 @@ class SessionScreen extends StatelessWidget {
             child: Column(
               children: [
                 const Spacer(flex: 2),
+                if (practice.isNotEmpty) ...[
+                  Text(
+                    practice,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  if (structured)
+                    Text(
+                      '${engine.segmentIndex + 1} of ${engine.segments.length}',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  const SizedBox(height: 24),
+                ],
                 Text(
                   inCountdown
                       ? 'starting in'
@@ -35,7 +51,9 @@ class SessionScreen extends StatelessWidget {
                           ? 'meditating'
                           : inOvertime
                               ? 'sitting on'
-                              : 'remaining',
+                              : structured
+                                  ? 'remaining in this practice'
+                                  : 'remaining',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 8),
@@ -46,7 +64,9 @@ class SessionScreen extends StatelessWidget {
                           ? formatMmSs(engine.elapsed)
                           : inOvertime
                               ? '+${formatMmSs(engine.overtime)}'
-                              : formatMmSs(engine.remaining),
+                              : structured
+                                  ? formatMmSs(engine.segmentRemaining)
+                                  : formatMmSs(engine.remaining),
                   style: Theme.of(context).textTheme.displayLarge?.copyWith(
                         fontSize: 88,
                         fontWeight: FontWeight.w200,
@@ -56,6 +76,13 @@ class SessionScreen extends StatelessWidget {
                 if (inOvertime)
                   Text(
                     'timer ended at ${formatMmSs(engine.planned)}',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                if (structured && !inCountdown && !inOvertime)
+                  Text(
+                    next == null
+                        ? 'last practice · ${formatMmSs(engine.remaining)} total'
+                        : 'then $next · ${formatMmSs(engine.remaining)} total',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 const Spacer(),

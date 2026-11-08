@@ -8,6 +8,33 @@ Google Sheet and Toggl without any typing afterwards.
 
 ## How it works
 
+- **Two kinds of sit** — the home screen is a toggle between **Structured
+  session** and **Single practice**. The choice, the selected session and
+  the last practice are remembered, so the app reopens the way it was left.
+- **Single practice** — pick a practice chip (or *Write in…* and type one;
+  it joins the list when the sit begins) and a length, or ∞ for open-ended.
+  The practice list is edited under Settings → Practices (reorder, rename,
+  delete); renaming updates any structured session that uses it.
+- **Structured session** — a saved protocol: an ordered list of segments,
+  each a practice for a set number of minutes, e.g. 5 min following the
+  breath, 5 min noting "hear", 5 min noting "feel", 5 min noting "see",
+  10 min open monitoring (the built-in *Noting ladder*). Each segment has a
+  **cue** that plays as it begins: any gong from the bank, the practice name
+  spoken aloud (text-to-speech), both, or neither. The first segment's cue
+  starts the sit (in place of the start gong); the Settings end gong rings
+  when the last segment ends, then overtime counts up as usual. Interval
+  gongs from Settings apply to single practices only. Design sessions under
+  Settings → Structured sessions or the *Edit structured sessions* link on
+  the home screen: name, drag-to-reorder segments, per-segment practice
+  (type it or pick from the list), minutes, cue, and a preview button.
+- **During the sit** the session screen shows the current practice; in a
+  structured session also "2 of 5", the time left in this practice, what
+  comes next, and the total remaining.
+- **After every sit** the same post-session questionnaire runs, and the
+  practice (or session name) is logged with the session: sheet columns
+  `Practice` (the practice, or the protocol's name) and `Protocol` (the
+  segments as "Following the breath 5 / Noting: hear 5 / …", blank for a
+  single practice). History shows the practice on each row.
 - **Timer with gong** — set a length, press Begin; a synthesized gong sounds
   when time is up. Settings → Gongs picks the sound for the start and end
   gongs from six options (gong, deep gong, shimmering gong, singing bowl,
@@ -59,11 +86,15 @@ Google Sheet and Toggl without any typing afterwards.
 - **Drafts are never lost** — every text field saves on each keystroke.
   Settings fields (sheet URL, secret, Toggl token and description, countdown,
   metronome gaps, interval gong times) write straight into the persisted
-  settings. The post-session questionnaire and the question editor save to
-  SharedPreferences under `draft.questionnaire.<session start>` and
-  `draft.questionEditor.<question|new>` (`lib/infra/storage/drafts.dart`) and
-  restore before first paint; they clear only on Save / "Save & log" or
-  "Discard session".
+  settings. Other screens save to SharedPreferences
+  (`lib/infra/storage/drafts.dart`) and restore before first paint:
+  the questionnaire under `draft.questionnaire.<session start>`, the question
+  editor under `draft.questionEditor.<question|new>`, the home-screen
+  write-in practice under `draft.home.writeIn`, the structured-session
+  editor under `draft.protocolEditor.<id|new>` (name, every segment's
+  practice and minutes text, cues), and the practice rename dialog under
+  `draft.practiceEditor.<name|new>`. They clear only on Save / "Save & log",
+  "Discard", or when the sit begins (write-in).
 
 ### Code layout
 
@@ -71,11 +102,12 @@ The code is split so an Android release is just a build, and even a
 non-Flutter port would only replace the thin outer layers:
 
 - `lib/core/` — **pure Dart, no platform code**: session state machine
-  (`session_engine.dart`), metronome scheduler, HRV math, BLE heart-rate
-  packet parser, models, and service interfaces.
+  (`session_engine.dart`, including protocol segments), metronome scheduler,
+  HRV math, BLE heart-rate packet parser, models (practices, protocols,
+  session plan), and service interfaces (audio, speech, …).
 - `lib/infra/` — implementations of those interfaces: audioplayers audio,
-  flutter_blue_plus BLE, Google Sheets webhook, Toggl v9 API, settings
-  storage, drafts.
+  flutter_tts speech, flutter_blue_plus BLE, Google Sheets webhook, Toggl v9
+  API, settings storage, drafts.
 - `lib/controllers/` — `SessionController` wires the engine to audio,
   metronome, HR recording, and logging.
 - `lib/ui/` — the screens (home, session, questionnaire, settings,
@@ -87,32 +119,36 @@ non-Flutter port would only replace the thin outer layers:
 | File | Purpose |
 | --- | --- |
 | `lib/main.dart` | Entry point; builds every service and wires providers. Header comment describes where config/state live |
-| `lib/core/session_engine.dart` | Session state machine: countdown, timer, gongs, overtime, abort |
+| `lib/core/session_engine.dart` | Session state machine: countdown, timer, gongs, protocol segments, overtime, abort |
 | `lib/core/metronome.dart` | Metronome scheduler |
 | `lib/core/hrv/hr_recorder.dart`, `hrv_analysis.dart` | HR/RR recording and RMSSD/SDNN/score math |
 | `lib/core/ble/heart_rate_parser.dart` | BLE Heart Rate Measurement packet parser |
-| `lib/core/models/` | `AppSettings`, `GongConfig`, `MetronomeConfig`, `Question`, `SessionOutcome`, `SessionRecord`, heart-rate types |
-| `lib/core/services/` | Interfaces: audio, clock, heart rate, session log, sheets logger, Toggl |
+| `lib/core/models/` | `AppSettings`, `GongConfig`, `MetronomeConfig`, `Protocol`/`ProtocolSegment`/`Cue` + defaults (`protocol.dart`), `SessionPlan`, `Question`, `SessionOutcome`, `SessionRecord`, heart-rate types |
+| `lib/core/services/` | Interfaces: audio, speech (TTS), clock, heart rate, session log, sheets logger, Toggl |
 | `lib/infra/audio/player_audio_service.dart` | audioplayers implementation; gong bank asset list; keep-alive loop |
+| `lib/infra/speech/flutter_tts_speech.dart` | Spoken cues via flutter_tts (shared audio session, mix-with-others) |
 | `lib/infra/ble/flutter_blue_hr_service.dart` | flutter_blue_plus heart-rate strap connection |
 | `lib/infra/sheets/webhook_sheets_logger.dart` | POSTs rows to the Apps Script web app with the shared secret |
 | `lib/infra/toggl/toggl_api_service.dart` | Toggl Track v9 API: workspace discovery, projects, time entries |
 | `lib/infra/storage/settings_store.dart` | Loads/saves `AppSettings` as one JSON string in SharedPreferences |
 | `lib/infra/storage/session_history_store.dart` | Local session history + pending-upload queue and retry |
-| `lib/infra/storage/drafts.dart` | Save-as-you-type storage for the questionnaire and question editor |
-| `lib/controllers/session_controller.dart` | Glue between engine, audio, metronome, HR recorder, history |
-| `lib/ui/home_screen.dart` | Length picker, Begin, HR chip, links to History and Settings |
-| `lib/ui/session_screen.dart` | Running timer / stopwatch, Stop |
+| `lib/infra/storage/drafts.dart` | Save-as-you-type storage for the questionnaire, editors and write-in field |
+| `lib/controllers/session_controller.dart` | Glue between engine, audio, speech, metronome, HR recorder, history; plays segment cues |
+| `lib/ui/home_screen.dart` | Structured / single toggle, protocol cards, practice chips + write-in, length picker, Begin, HR chip |
+| `lib/ui/session_screen.dart` | Running timer / stopwatch with current practice and segment, Stop |
 | `lib/ui/questionnaire_screen.dart` | Post-session summary, overtime choice, questions, Save & log |
 | `lib/ui/settings_screen.dart` | Timer, gongs, metronome, Sheets, Toggl, HR strap, questions |
 | `lib/ui/questions_screen.dart` | Question list (reorder/delete) and the question editor |
+| `lib/ui/protocols_screen.dart` | Structured session list (reorder/duplicate/delete) and the segment editor |
+| `lib/ui/practices_screen.dart` | Practice list (reorder/rename/delete) |
 | `lib/ui/history_screen.dart`, `hr_connect_sheet.dart`, `format.dart` | History list, BLE picker sheet, formatting helpers |
 | `assets/audio/*.wav` | Synthesized gong bank, metronome tones, tick, near-silent keep-alive loop |
 | `docs/apps_script.gs` | The Google Sheet side: appends rows, checks `SECRET`, splits oversized cells |
 | `tool/gen_sounds.py` | Regenerates `assets/audio/` (stdlib only, about a minute) |
+| `tool/gen_icon.swift` | Draws the app icon (partially opened lotus) into the iOS asset catalog and Android mipmaps |
 | `tool/phone.sh` | backup / restore / deploy / status against the connected iPhone via `devicectl` |
 | `tool/.device` | (untracked) the iPhone UDID for `phone.sh` |
-| `test/*.dart` | Unit tests: engine, metronome, HRV, BLE parser, gong config, questions, history store, sheets logger, drafts |
+| `test/*.dart` | Unit tests: engine (incl. segments), metronome, HRV, BLE parser, gong config, protocols/plans/settings, questions, history store, sheets logger, drafts |
 
 ## Runtime locations
 
@@ -136,7 +172,8 @@ non-Flutter port would only replace the thin outer layers:
 
 Prereqs (macOS): [Flutter](https://docs.flutter.dev/get-started/install)
 (`brew install --cask flutter`), and for iOS: full Xcode from the App Store
-plus CocoaPods (`brew install cocoapods`).
+plus CocoaPods (`brew install cocoapods`; needed since `flutter_tts`, which
+has no Swift Package manifest, so Flutter generated `ios/Podfile`).
 
 ```sh
 flutter pub get
@@ -170,6 +207,17 @@ Regenerate the audio assets (pass filenames to redo only some):
 ```sh
 python3 tool/gen_sounds.py
 ```
+
+Regenerate the app icon after editing the drawing in `tool/gen_icon.swift`:
+
+```sh
+swift tool/gen_icon.swift
+```
+
+Try the new session model without a phone: `flutter test` covers segment
+timing (`test/session_engine_test.dart`) and protocol/plan serialisation
+(`test/protocol_test.dart`); the cue preview button in the session editor
+plays a segment's gong + spoken name on demand.
 
 Point `build/` outside iCloud if the symlink is lost:
 
@@ -215,6 +263,24 @@ connected when you press Begin, the session records HR/HRV automatically.
 - Bluetooth permission is requested on first strap connection.
 
 ## Gotchas learned
+
+- `ios/Podfile` pins `platform :ios, '15.0'` and forces every pod target to
+  15.0 in `post_install`. Flutter's template says 13.0 and `flutter_tts`'s
+  podspec says 8.0; Xcode 27 refuses anything below 15.0 ("Target
+  Integrity: IPHONEOS_DEPLOYMENT_TARGET is set to 13.0, but the range of
+  supported deployment target versions is 15.0 to 27.2.x").
+- `flutter_tts` must share the audio session with audioplayers
+  (`setSharedInstance(true)` + playback category with mix-with-others,
+  done in `FlutterTtsSpeech.init`). Without that, the first utterance
+  reconfigures/deactivates the session and the keep-alive loop stops, so
+  later gongs wait for the phone to be unlocked.
+- Spoken cues start 1.5 s after their gong (`speechDelayAfterGong`) so the
+  voice sits on the gong's tail rather than fighting the strike.
+- The 1024 px iOS marketing icon must have no alpha channel; `gen_icon.swift`
+  draws into a `noneSkipLast` CoreGraphics context for that reason (an
+  `NSBitmapImageRep` with `hasAlpha: false` cannot even be made a context).
+- Settings written before this feature load the default practice list and
+  the built-in *Noting ladder*; an explicitly empty list stays empty.
 
 - `flutter install` / `flutter run` after an uninstall delete the app first,
   wiping settings and history and dropping the icon at the end of the last

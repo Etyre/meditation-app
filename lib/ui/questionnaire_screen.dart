@@ -130,6 +130,9 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (controller.plan.label.isNotEmpty)
+                      _row(controller.plan.isProtocol ? 'Session' : 'Practice',
+                          controller.plan.label),
                     _row(
                         'Timer',
                         outcome.openEnded

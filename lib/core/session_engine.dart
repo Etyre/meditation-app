@@ -39,11 +39,19 @@ class SessionEngine extends ChangeNotifier {
   /// same tick (e.g. the app was suspended), only the latest one fires.
   void Function(int index)? onIntervalGong;
 
+  /// Called when a later protocol segment begins (index 1 and up), with the
+  /// index into the [segments] list passed to [start]. The first segment
+  /// starts with the timer itself, so it is announced by the caller. If
+  /// several boundaries are crossed on one tick (app suspended), only the
+  /// latest fires.
+  void Function(int index)? onSegmentStart;
+
   SessionEngine({
     required this.clock,
     this.onGong,
     this.onCountdownDone,
     this.onIntervalGong,
+    this.onSegmentStart,
   });
 
   SessionPhase _phase = SessionPhase.idle;
@@ -57,6 +65,13 @@ class SessionEngine extends ChangeNotifier {
   /// Interval gongs still to ring, as (index, time into the sit), sorted by
   /// time. Entries are dropped from the front as they fire.
   List<(int, Duration)> _pendingIntervals = const [];
+
+  /// Segment lengths for a structured session; empty for a single practice.
+  List<Duration> _segments = const [];
+
+  /// Times into the sit at which each segment starts (index 0 is zero).
+  List<Duration> _segmentStarts = const [];
+  int _segmentIndex = 0;
   Timer? _ticker;
 
   SessionPhase get phase => _phase;
@@ -65,6 +80,25 @@ class SessionEngine extends ChangeNotifier {
 
   /// True while running an open-ended session (stopwatch only, no gong).
   bool get openEnded => _openEnded;
+
+  /// The segment lengths passed to [start] (empty for a single practice).
+  List<Duration> get segments => _segments;
+
+  /// Index of the segment in progress; stays on the last one in overtime.
+  int get segmentIndex => _segmentIndex;
+
+  /// Time left in the current segment (zero outside a running structured
+  /// session).
+  Duration get segmentRemaining {
+    if (_segments.isEmpty ||
+        _phase != SessionPhase.running ||
+        _startedAt == null) {
+      return Duration.zero;
+    }
+    final end = _segmentStarts[_segmentIndex] + _segments[_segmentIndex];
+    final left = end - clock.now().difference(_startedAt!);
+    return left.isNegative ? Duration.zero : left;
+  }
 
   /// Time left on the countdown (clamped at zero).
   Duration get remaining {
@@ -105,15 +139,34 @@ class SessionEngine extends ChangeNotifier {
   /// countdown) at which [onIntervalGong] fires with that entry's index.
   /// Non-positive times, and for timed sessions times at or past [planned],
   /// are ignored.
+  ///
+  /// [segments] splits a timed sit into consecutive practices; their sum
+  /// must equal [planned]. [onSegmentStart] fires as each one after the
+  /// first begins.
   void start(
     Duration? planned, {
     Duration countdown = Duration.zero,
     List<Duration> intervalGongs = const [],
+    List<Duration> segments = const [],
   }) {
     assert(_phase == SessionPhase.idle, 'session already in progress');
     assert(planned == null || planned > Duration.zero);
+    assert(
+        segments.isEmpty ||
+            (planned != null &&
+                segments.fold(Duration.zero, (a, b) => a + b) == planned),
+        'segments must add up to the planned length');
     _openEnded = planned == null;
     _planned = planned ?? Duration.zero;
+    _segments = List.unmodifiable(segments);
+    final starts = <Duration>[];
+    var at = Duration.zero;
+    for (final s in segments) {
+      starts.add(at);
+      at += s;
+    }
+    _segmentStarts = starts;
+    _segmentIndex = 0;
     _countdown = countdown;
     _gongAt = null;
     _pendingIntervals = [
@@ -171,6 +224,15 @@ class SessionEngine extends ChangeNotifier {
           _pendingIntervals = _pendingIntervals.sublist(1);
         }
         if (due != null) onIntervalGong?.call(due);
+        var next = _segmentIndex;
+        while (next + 1 < _segmentStarts.length &&
+            elapsed >= _segmentStarts[next + 1]) {
+          next++;
+        }
+        if (next != _segmentIndex) {
+          _segmentIndex = next;
+          onSegmentStart?.call(next);
+        }
       }
     }
     // Notify every tick so the UI clock repaints.
@@ -207,6 +269,9 @@ class SessionEngine extends ChangeNotifier {
     _gongAt = null;
     _openEnded = false;
     _pendingIntervals = const [];
+    _segments = const [];
+    _segmentStarts = const [];
+    _segmentIndex = 0;
   }
 
   @override

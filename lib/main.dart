@@ -1,7 +1,9 @@
 // Meditation Timer: a Flutter app (iPhone, buildable for Android) with a gong
 // timer, overtime stopwatch, interval gongs, metronome, BLE heart-rate/HRV
 // recording, post-session questions, and logging to a Google Sheet (Apps
-// Script webhook) and Toggl Track.
+// Script webhook) and Toggl Track. A sit is either a single named practice
+// with a timer, or a structured session: a saved protocol of practices with
+// a gong and/or spoken cue between them.
 //
 // Config and state: everything (settings incl. the Sheets URL + secret, Toggl
 // token, questions, metronome, remembered HR strap; local session history and
@@ -22,6 +24,7 @@ import 'core/services/heart_rate_service.dart';
 import 'core/session_engine.dart';
 import 'infra/audio/player_audio_service.dart';
 import 'infra/ble/flutter_blue_hr_service.dart';
+import 'infra/speech/flutter_tts_speech.dart';
 import 'infra/sheets/webhook_sheets_logger.dart';
 import 'infra/storage/drafts.dart';
 import 'infra/storage/session_history_store.dart';
@@ -39,6 +42,8 @@ Future<void> main() async {
 
   final audio = PlayerAudioService();
   await audio.init();
+  final speech = FlutterTtsSpeech();
+  await speech.init();
 
   final heartRate = FlutterBlueHrService();
   final metronome = Metronome(audio);
@@ -66,6 +71,7 @@ Future<void> main() async {
     engine: engine,
     metronome: metronome,
     audio: audio,
+    speech: speech,
     heartRate: heartRate,
     recorder: recorder,
     settingsStore: settingsStore,
@@ -74,6 +80,7 @@ Future<void> main() async {
   engine.onGong = controller.handleGong;
   engine.onCountdownDone = controller.handleCountdownDone;
   engine.onIntervalGong = controller.handleIntervalGong;
+  engine.onSegmentStart = controller.handleSegmentStart;
 
   // Push any sessions recorded offline in earlier runs.
   history.syncPending();

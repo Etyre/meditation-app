@@ -9,6 +9,13 @@ class SessionLogEntry {
   final SessionOutcome outcome;
   final bool includeOvertime;
 
+  /// The practice done, or the protocol's name for a structured session.
+  final String practice;
+
+  /// For a structured session, its segments as "practice minutes / …";
+  /// empty for a single practice.
+  final String protocol;
+
   /// Question → answer, in the order the questions were asked.
   final Map<String, String> answers;
 
@@ -34,6 +41,8 @@ class SessionLogEntry {
     required this.outcome,
     required this.includeOvertime,
     required this.answers,
+    this.practice = '',
+    this.protocol = '',
     this.hrv,
     this.rrIntervalsMs = const [],
     this.hrSeries = const [],
@@ -55,6 +64,8 @@ class SessionLogEntry {
       'includedOvertime': includeOvertime,
       'aborted': o.aborted,
       'openEnded': o.openEnded,
+      'practice': practice,
+      'protocol': protocol,
       'answers': answers,
       'meanHr': hrv?.meanHr,
       'minHr': hrv?.minHr,

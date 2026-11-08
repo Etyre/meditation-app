@@ -11,6 +11,8 @@ import '../core/services/audio_service.dart';
 import '../infra/storage/settings_store.dart';
 import '../infra/toggl/toggl_api_service.dart';
 import 'hr_connect_sheet.dart';
+import 'practices_screen.dart';
+import 'protocols_screen.dart';
 import 'questions_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -119,6 +121,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          _sectionTitle('Practices'),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Practices'),
+            subtitle: Text(settings.practices.isEmpty
+                ? 'None yet'
+                : settings.practices.join(' · ')),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const PracticesScreen()),
+            ),
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Structured sessions'),
+            subtitle: Text(settings.protocols.isEmpty
+                ? 'None designed yet'
+                : settings.protocols.map((p) => p.name).join(' · ')),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ProtocolsScreen()),
+            ),
+          ),
+          const Divider(height: 32),
           _sectionTitle('Timer'),
           ListTile(
             contentPadding: EdgeInsets.zero,
@@ -183,9 +209,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const Padding(
             padding: EdgeInsets.only(top: 4, bottom: 4),
             child: Text(
-                'Extra gongs part-way through the sit, at the given number '
-                'of minutes after the timer starts. Any set at or past the '
-                'timer length are skipped.'),
+                'Extra gongs part-way through a single-practice sit, at the '
+                'given number of minutes after the timer starts. Any set at '
+                'or past the timer length are skipped. Structured sessions '
+                'use their own cues instead.'),
           ),
           for (var i = 0; i < settings.gongs.intervals.length; i++)
             _intervalGongEditor(settings, i),

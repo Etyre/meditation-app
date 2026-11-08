@@ -324,5 +324,108 @@ void main() {
         engine.stop();
       });
     });
+
+    test('segments: index, remaining-in-segment and onSegmentStart follow '
+        'the boundaries; the end gong ends the last one', () {
+      fakeAsync((async) {
+        final clock = FakeClock();
+        final started = <int>[];
+        var endGongs = 0;
+        final engine = SessionEngine(
+          clock: clock,
+          onGong: () => endGongs++,
+          onSegmentStart: started.add,
+        );
+        engine.start(const Duration(minutes: 12), segments: const [
+          Duration(minutes: 5),
+          Duration(minutes: 5),
+          Duration(minutes: 2),
+        ]);
+        expect(engine.segmentIndex, 0);
+        expect(engine.segments.length, 3);
+        expect(engine.segmentRemaining, const Duration(minutes: 5));
+        expect(started, isEmpty); // the first segment is the caller's to cue
+
+        clock.advance(const Duration(minutes: 4, seconds: 59));
+        async.elapse(const Duration(minutes: 4, seconds: 59));
+        expect(engine.segmentIndex, 0);
+        expect(engine.segmentRemaining, const Duration(seconds: 1));
+
+        clock.advance(const Duration(seconds: 1));
+        async.elapse(const Duration(seconds: 1));
+        expect(engine.segmentIndex, 1);
+        expect(started, [1]);
+        expect(engine.segmentRemaining, const Duration(minutes: 5));
+        expect(engine.remaining, const Duration(minutes: 7));
+
+        clock.advance(const Duration(minutes: 5));
+        async.elapse(const Duration(minutes: 5));
+        expect(engine.segmentIndex, 2);
+        expect(started, [1, 2]);
+
+        clock.advance(const Duration(minutes: 2));
+        async.elapse(const Duration(minutes: 2));
+        expect(endGongs, 1);
+        expect(engine.phase, SessionPhase.overtime);
+        expect(engine.segmentIndex, 2); // stays on the last one
+        expect(engine.segmentRemaining, Duration.zero);
+        expect(started, [1, 2]);
+        engine.stop();
+        expect(engine.segments, isEmpty);
+      });
+    });
+
+    test('several segment boundaries crossed on one tick fire only the '
+        'latest', () {
+      fakeAsync((async) {
+        final clock = FakeClock();
+        final started = <int>[];
+        final engine = SessionEngine(clock: clock, onSegmentStart: started.add);
+        engine.start(const Duration(minutes: 20), segments: const [
+          Duration(minutes: 5),
+          Duration(minutes: 5),
+          Duration(minutes: 5),
+          Duration(minutes: 5),
+        ]);
+        // Suspended: the clock jumps straight into segment 3.
+        clock.advance(const Duration(minutes: 12));
+        engine.tick();
+        expect(started, [2]);
+        expect(engine.segmentIndex, 2);
+        engine.stop();
+      });
+    });
+
+    test('segments are measured from the timer start, after the countdown',
+        () {
+      fakeAsync((async) {
+        final clock = FakeClock();
+        final started = <int>[];
+        final engine = SessionEngine(clock: clock, onSegmentStart: started.add);
+        engine.start(const Duration(minutes: 2),
+            countdown: const Duration(seconds: 30),
+            segments: const [Duration(minutes: 1), Duration(minutes: 1)]);
+        expect(engine.segmentRemaining, Duration.zero); // not running yet
+        clock.advance(const Duration(minutes: 1));
+        async.elapse(const Duration(minutes: 1));
+        expect(started, isEmpty); // only 30 s into the sit
+        clock.advance(const Duration(seconds: 30));
+        async.elapse(const Duration(seconds: 30));
+        expect(started, [1]);
+        engine.stop();
+      });
+    });
+
+    test('a single practice has no segments', () {
+      fakeAsync((async) {
+        final clock = FakeClock();
+        final engine = SessionEngine(clock: clock);
+        engine.start(const Duration(minutes: 5));
+        expect(engine.segments, isEmpty);
+        expect(engine.segmentIndex, 0);
+        expect(engine.segmentRemaining, Duration.zero);
+        engine.stop();
+      });
+    });
   });
 }

@@ -1,6 +1,19 @@
 import 'gong_config.dart';
 import 'metronome_config.dart';
+import 'protocol.dart';
 import 'question.dart';
+
+/// Which kind of sit the home screen is set up for.
+enum SessionMode {
+  /// One practice for a set time (or open-ended).
+  single,
+
+  /// A saved protocol: a sequence of practices with signals between them.
+  structured;
+
+  static SessionMode fromName(String? name) => SessionMode.values
+      .firstWhere((m) => m.name == name, orElse: () => SessionMode.single);
+}
 
 /// All user-configurable settings, persisted as JSON.
 class AppSettings {
@@ -40,6 +53,18 @@ class AppSettings {
   /// Questions asked after each session; answers are logged to the sheet.
   final List<Question> questions;
 
+  /// The practices offered on the home screen (user-editable; a written-in
+  /// practice is added here when the sit starts).
+  final List<String> practices;
+
+  /// Saved structured sessions.
+  final List<Protocol> protocols;
+
+  /// What the home screen last had selected, so it opens the same way.
+  final SessionMode lastMode;
+  final String lastPractice;
+  final String lastProtocolId;
+
   /// Remembered heart rate monitor so the app can reconnect quickly.
   final String lastHrDeviceId;
   final String lastHrDeviceName;
@@ -57,6 +82,11 @@ class AppSettings {
     this.togglProjectId = 0,
     this.togglProjectName = '',
     this.questions = defaultQuestions,
+    this.practices = PracticeDefaults.practices,
+    this.protocols = PracticeDefaults.protocols,
+    this.lastMode = SessionMode.single,
+    this.lastPractice = '',
+    this.lastProtocolId = '',
     this.lastHrDeviceId = '',
     this.lastHrDeviceName = '',
   });
@@ -88,6 +118,11 @@ class AppSettings {
     int? togglProjectId,
     String? togglProjectName,
     List<Question>? questions,
+    List<String>? practices,
+    List<Protocol>? protocols,
+    SessionMode? lastMode,
+    String? lastPractice,
+    String? lastProtocolId,
     String? lastHrDeviceId,
     String? lastHrDeviceName,
   }) =>
@@ -104,6 +139,11 @@ class AppSettings {
         togglProjectId: togglProjectId ?? this.togglProjectId,
         togglProjectName: togglProjectName ?? this.togglProjectName,
         questions: questions ?? this.questions,
+        practices: practices ?? this.practices,
+        protocols: protocols ?? this.protocols,
+        lastMode: lastMode ?? this.lastMode,
+        lastPractice: lastPractice ?? this.lastPractice,
+        lastProtocolId: lastProtocolId ?? this.lastProtocolId,
         lastHrDeviceId: lastHrDeviceId ?? this.lastHrDeviceId,
         lastHrDeviceName: lastHrDeviceName ?? this.lastHrDeviceName,
       );
@@ -121,6 +161,11 @@ class AppSettings {
         'togglProjectId': togglProjectId,
         'togglProjectName': togglProjectName,
         'questions': [for (final q in questions) q.toJson()],
+        'practices': practices,
+        'protocols': [for (final p in protocols) p.toJson()],
+        'lastMode': lastMode.name,
+        'lastPractice': lastPractice,
+        'lastProtocolId': lastProtocolId,
         'lastHrDeviceId': lastHrDeviceId,
         'lastHrDeviceName': lastHrDeviceName,
       };
@@ -145,6 +190,15 @@ class AppSettings {
               ?.map(Question.fromJson)
               .toList() ??
           defaultQuestions,
+      practices: (json['practices'] as List?)?.cast<String>() ??
+          PracticeDefaults.practices,
+      protocols: (json['protocols'] as List?)
+              ?.map((p) => Protocol.fromJson(Map<String, dynamic>.from(p as Map)))
+              .toList() ??
+          PracticeDefaults.protocols,
+      lastMode: SessionMode.fromName(json['lastMode'] as String?),
+      lastPractice: json['lastPractice'] as String? ?? '',
+      lastProtocolId: json['lastProtocolId'] as String? ?? '',
       lastHrDeviceId: json['lastHrDeviceId'] as String? ?? '',
       lastHrDeviceName: json['lastHrDeviceName'] as String? ?? '',
     );

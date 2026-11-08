@@ -41,6 +41,29 @@ void main() {
       expect(payload['baselineHr'], 62);
       expect(payload['baselineHrSeconds'], 200);
       expect(payload['first20sHr'], 60);
+      // No practice given → empty strings, so the sheet columns exist but
+      // are blank.
+      expect(payload['practice'], '');
+      expect(payload['protocol'], '');
+    });
+
+    test('practice and protocol summary are logged', () {
+      final outcome = SessionOutcome(
+        startedAt: start,
+        endedAt: end,
+        planned: const Duration(minutes: 30),
+        completedTimer: true,
+        overtime: Duration.zero,
+      );
+      final payload = SessionLogEntry(
+        outcome: outcome,
+        includeOvertime: false,
+        answers: {},
+        practice: 'Noting ladder',
+        protocol: 'Following the breath 5 / Noting: hear 5',
+      ).toSheetsPayload();
+      expect(payload['practice'], 'Noting ladder');
+      expect(payload['protocol'], 'Following the breath 5 / Noting: hear 5');
     });
 
     test('aborted session logs actual elapsed as meditated time', () {

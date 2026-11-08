@@ -26,6 +26,8 @@ class SessionRecord {
       (payload['meditatedMinutes'] as num?)?.toDouble() ?? 0;
   bool get openEnded => payload['openEnded'] as bool? ?? false;
   bool get aborted => payload['aborted'] as bool? ?? false;
+  String get practice => payload['practice'] as String? ?? '';
+  bool get structured => (payload['protocol'] as String? ?? '').isNotEmpty;
 
   Map<String, dynamic> toJson() => {
         'payload': payload,

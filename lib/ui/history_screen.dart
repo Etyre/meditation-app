@@ -74,10 +74,15 @@ class _RecordTile extends StatelessWidget {
 
     return ListTile(
       leading: Icon(
-        record.openEnded ? Icons.all_inclusive : Icons.timer_outlined,
+        record.openEnded
+            ? Icons.all_inclusive
+            : record.structured
+                ? Icons.view_timeline_outlined
+                : Icons.timer_outlined,
         color: Theme.of(context).colorScheme.primary,
       ),
-      title: Text('$minsLabel min${record.aborted ? ' · stopped early' : ''}'),
+      title: Text('$minsLabel min${record.aborted ? ' · stopped early' : ''}'
+          '${record.practice.isEmpty ? '' : ' · ${record.practice}'}'),
       subtitle: Text(_when(record.startedAt)),
       trailing: (wantsSheets || wantsToggl)
           ? Tooltip(
